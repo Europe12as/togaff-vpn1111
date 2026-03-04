@@ -1,3 +1,15 @@
+"""
+╔══════════════════════════════════════════════════════╗
+║          TOGAFF VPN  ·  Ultimate Edition             ║
+║  Admin panel · Access control · Smart proxy engine   ║
+╚══════════════════════════════════════════════════════╝
+
+  Установка зависимостей:
+  pip install pyTelegramBotAPI requests[socks] PySocks urllib3
+
+  Запуск:  python3 togaff_vpn_bot.py
+"""
+
 import telebot
 import requests
 import socket
@@ -18,7 +30,7 @@ TOKEN        = "8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30"
 MINI_APP_URL = "https://t.me/togaff_vpn_bot/app"
 
 # ─── Администратор (твой Telegram ID) ─────────────────
-ADMIN_IDS = {7321093872}   # ← сюда свой ID (узнать: @userinfobot)
+ADMIN_IDS = {7394153845}   # ← сюда свой ID (узнать: @userinfobot)
 
 # ─── Файлы для сохранения данных ──────────────────────
 USERS_FILE  = "allowed_users.json"   # whitelist
@@ -44,6 +56,22 @@ bot = telebot.TeleBot(TOKEN, parse_mode=None)
 # ══════════════════════════════════════════════════════
 #             УПРАВЛЕНИЕ ДОСТУПОМ (WHITELIST)
 # ══════════════════════════════════════════════════════
+
+def _load_json(path, default):
+    try:
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                return json.load(f)
+    except:
+        pass
+    return default
+
+def _save_json(path, data):
+    try:
+        with open(path, "w") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except:
+        pass
 
 # allowed_users = {uid: {"username":..., "first_name":..., "added":..., "uses":0}}
 allowed_users: dict = _load_json(USERS_FILE, {})
@@ -88,7 +116,7 @@ def access_required(fn):
                 "🔒  *Доступ закрыт*\n\n"
                 "Этот бот работает только по приглашению.\n"
                 "Обратись к администратору для получения доступа.",
-                parse_mode="MarkdownV2")
+                parse_mode="Markdown")
             return
         return fn(msg_or_call, *args, **kwargs)
     wrapper.__name__ = fn.__name__
@@ -558,6 +586,14 @@ def cmd_start(msg):
                 "uses":       0,
             }
             save_users()
+
+    if not is_allowed(uid):
+        bot.send_message(msg.chat.id,
+            "🔒  *Доступ закрыт*\n\n"
+            "Этот бот работает только по приглашению.\n"
+            "Напиши администратору и попроси добавить тебя.",
+            parse_mode="Markdown")
+        return
 
     # Инкрементируем счётчик использований
     key = _uid_key(uid)
