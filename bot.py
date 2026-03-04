@@ -58,6 +58,32 @@ SOURCES = {
 cache = {"socks5": [], "socks4": [], "http": [], "updated": 0}
 CACHE_TTL = 1800
 
+# ── Свои прокси (добавляются в HTTP-пул всегда) ─────────
+MY_PROXIES_HTTP = [
+    ("185.221.160.253", 80),  ("185.221.160.214", 80),
+    ("87.239.31.42",    80),  ("109.197.153.121", 8888),
+    ("188.235.146.220", 80),  ("94.26.241.120",   80),
+    ("89.23.112.143",   80),  ("91.222.238.112",  80),
+    ("82.208.111.19", 8080),  ("185.244.173.101", 80),
+    ("185.221.152.147", 80),  ("91.107.124.250",  80),
+    ("212.96.201.54",   80),  ("5.180.241.126",   80),
+    ("195.91.179.91",   80),  ("95.217.105.20",   80),
+    ("37.120.189.106",  80),  ("89.31.143.1",     80),
+    ("78.47.138.199",   80),  ("89.31.143.2",     80),
+    ("195.201.34.206",  80),  ("89.31.143.3",     80),
+    ("167.86.97.239", 8080),  ("138.201.245.91", 8080),
+    ("89.31.143.12",    80),  ("51.178.43.147",   80),
+    ("87.247.251.24",   80),  ("83.143.145.67",   80),
+    ("85.26.218.76",    80),  ("162.19.226.235",  80),
+    ("5.188.31.212",    80),  ("87.247.251.240",  80),
+    ("207.254.28.68",   80),  ("104.167.29.113",  80),
+    ("116.202.102.255", 80),  ("77.238.66.2",     80),
+    ("217.115.115.252", 80),  ("85.187.17.39",    80),
+    ("213.135.166.142", 80),  ("217.145.93.115",  80),
+    ("141.105.107.34",  80),  ("93.170.73.47",    80),
+    ("31.7.38.227",     80),
+]
+
 users = {}
 
 def get_user(uid):
@@ -128,8 +154,22 @@ def refresh_cache():
     if time.time() - cache["updated"] < CACHE_TTL:
         return
     print("↻ Обновляю кэш прокси...")
+
+    # Свои прокси всегда идут первыми в HTTP-пуле
+    my_seen = set()
+    my_list = []
+    for h, p in MY_PROXIES_HTTP:
+        key = f"{h}:{p}"
+        if key not in my_seen:
+            my_seen.add(key)
+            my_list.append((h, p))
+
     for ptype, urls in SOURCES.items():
-        collected, seen = [], set()
+        if ptype == "http":
+            collected = list(my_list)
+            seen = set(my_seen)
+        else:
+            collected, seen = [], set()
         for url in urls:
             for h, p in fetch_list(url):
                 key = f"{h}:{p}"
@@ -138,9 +178,15 @@ def refresh_cache():
                     collected.append((h, p))
             if len(collected) >= 600:
                 break
-        random.shuffle(collected)
-        cache[ptype] = collected[:400]
-        print(f"  {ptype}: {len(cache[ptype])}")
+        if ptype == "http":
+            tail = collected[len(my_list):]
+            random.shuffle(tail)
+            cache[ptype] = (my_list + tail)[:400]
+        else:
+            random.shuffle(collected)
+            cache[ptype] = collected[:400]
+        own = len(my_list) if ptype == "http" else 0
+        print(f"  {ptype}: {len(cache[ptype])}  (своих: {own})")
     cache["updated"] = time.time()
     print("✓ Кэш готов")
 
