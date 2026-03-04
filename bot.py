@@ -43,7 +43,7 @@ SCAN_SAMPLE     = 200   # кандидатов для /scan
 VERIFY_LIMIT    = 300   # макс попыток при /connect
 
 # ─── Стикер на /start ─────────────────────────────────
-WELCOME_PHOTO = "/mnt/user-data/uploads/1772665185302_image.png"  # Астольфо
+WELCOME_PHOTO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "astolfo.png")
 
 try:
     import socks        # PySocks
@@ -404,12 +404,13 @@ def _tcp_scan_fast(candidates, workers=60, timeout=1.2):
     return [(pt, h, p, ms) for ms, pt, h, p in results]
 
 def build_smart_pool(my_ip=None, sample=SCAN_SAMPLE,
-                     workers=VERIFY_WORKERS, status_cb=None):
+                     workers=VERIFY_WORKERS,
+                     status_cb=None, tcp_cb=None, http_cb=None):
     """
     Двухэтапный параллельный скан:
-    1) Быстрый TCP-скан sample кандидатов (60 потоков, 1.2с таймаут)
-    2) HTTP-верификация живых (40 потоков, 6с таймаут)
-    Гарантирует реальную смену IP.
+    Этап 1 — TCP-пинг всех кандидатов (60 потоков, 1.2с)
+    Этап 2 — HTTP-верификация только живых (40 потоков, 6с)
+    tcp_cb(done, total) и http_cb(done, total) — прогресс по этапам.
     """
     if my_ip is None:
         my_ip = get_my_ip() or ""
@@ -418,40 +419,65 @@ def build_smart_pool(my_ip=None, sample=SCAN_SAMPLE,
     all_cands = _all_candidates()
     random.shuffle(all_cands)
     cands = all_cands[:sample]
+    total_cands = len(cands)
+    print(f"  Кандидатов: {total_cands}")
 
-    # Этап 1: TCP скан
-    if status_cb:
-        status_cb(0, sample)
-    alive = _tcp_scan_fast(cands, workers=60, timeout=1.2)
-    print(f"  TCP живых: {len(alive)}/{len(cands)}")
+    # Этап 1: TCP скан с прогрессом
+    tcp_done = [0]
+    tcp_lock = threading.Lock()
+
+    def tcp_check(args):
+        pt, h, p = args
+        ms = tcp_ping(h, p, timeout=1.2)
+        with tcp_lock:
+            tcp_done[0] += 1
+            cb = tcp_cb or status_cb
+            if cb:
+                cb(tcp_done[0], total_cands)
+        if ms is not None:
+            return (ms, pt, h, p)
+        return None
+
+    alive_raw = []
+    with ThreadPoolExecutor(max_workers=60) as ex:
+        for res in as_completed([ex.submit(tcp_check, c) for c in cands]):
+            r = res.result()
+            if r:
+                alive_raw.append(r)
+
+    alive_raw.sort()   # по пингу
+    alive = [(pt, h, p, ms) for ms, pt, h, p in alive_raw]
+    print(f"  TCP живых: {len(alive)}/{total_cands}")
 
     if not alive:
         return []
 
-    # Этап 2: HTTP верификация только живых
-    total   = len(alive)
-    done    = 0
-    lock    = threading.Lock()
-    results = []
+    # Этап 2: HTTP верификация живых с прогрессом
+    total_alive = len(alive)
+    http_done   = [0]
+    http_lock   = threading.Lock()
+    results     = []
+    res_lock    = threading.Lock()
 
-    def verify(args):
-        nonlocal done
+    def http_verify(args):
         pt, h, p, ms = args
         new_ip = get_ip_via(pt, h, p, timeout=6)
-        with lock:
-            done += 1
-            if status_cb:
-                status_cb(done, total)
+        with http_lock:
+            http_done[0] += 1
+            cb = http_cb or status_cb
+            if cb:
+                cb(http_done[0], total_alive)
         if not new_ip or new_ip == my_ip:
             return None
         return {"type": pt, "host": h, "port": p,
                 "ping": ms, "new_ip": new_ip, "verified_at": time.time()}
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        for res in as_completed([ex.submit(verify, a) for a in alive]):
+        for res in as_completed([ex.submit(http_verify, a) for a in alive]):
             r = res.result()
             if r:
-                results.append(r)
+                with res_lock:
+                    results.append(r)
 
     results.sort(key=lambda x: x["ping"])
     cache["top_fast"]    = results[:TOP_FAST_COUNT]
@@ -999,51 +1025,66 @@ def _do_broadcast(admin_chat, text):
 @access_required
 def cmd_scan(msg):
     wait = bot.send_message(msg.chat.id,
-        "🔍  *Сканирую серверы...*\n\n"
-        f"{loading_bar(0)}  инициализация",
-        parse_mode="Markdown")
+        "🔍  Сканирую серверы...\n\n"
+        "Этап 1/2: TCP-пинг всех кандидатов",
+        parse_mode=None)
 
-    last = [0.0]
+    chat_id = msg.chat.id
+    mid     = wait.message_id
+    last    = [0.0]
 
-    def on_progress(done, total):
+    def upd(text):
         now = time.time()
-        if now - last[0] < 2:
+        if now - last[0] < 1.8:
             return
         last[0] = now
-        pct = int(done * 100 / max(total, 1))
         try:
-            bot.edit_message_text(
-                f"🔍  *Сканирую серверы...*\n\n"
-                f"{loading_bar(pct)}  {done}/{total} проверено",
-                msg.chat.id, wait.message_id, parse_mode="Markdown")
+            bot.edit_message_text(text, chat_id, mid)
         except:
             pass
 
+    def on_tcp(done, total):
+        pct = int(done * 100 / max(total, 1))
+        upd(f"🔍  Сканирую серверы...\n\n"
+            f"Этап 1/2: TCP-пинг\n"
+            f"{loading_bar(pct)}  {done}/{total} хостов")
+
+    def on_http(done, total):
+        pct = int(done * 100 / max(total, 1))
+        upd(f"🔍  Сканирую серверы...\n\n"
+            f"Этап 2/2: Проверка IP через прокси\n"
+            f"{loading_bar(pct)}  {done}/{total} живых")
+
     def do():
-        my_ip   = get_my_ip() or ""
-        results = build_smart_pool(my_ip, sample=SCAN_SAMPLE,
-                                   status_cb=on_progress)
+        my_ip = get_my_ip() or ""
+        results = build_smart_pool(
+            my_ip, sample=SCAN_SAMPLE,
+            tcp_cb=on_tcp, http_cb=on_http)
+
         if not results:
-            bot.edit_message_text(
-                "❌  *Серверы не найдены*\n\n"
-                "Попробуй `/refresh` и повтори `/scan`",
-                msg.chat.id, wait.message_id, parse_mode="Markdown")
+            try:
+                bot.edit_message_text(
+                    "❌  Серверы не найдены\n\n"
+                    "Попробуй /refresh и повтори /scan",
+                    chat_id, mid)
+            except:
+                pass
             return
 
-        lines = [f"⚡  *Смарт-пул готов* — {len(results)} серверов\n\n"
-                 f"━━━━━━━━━━━━━━━━━━━━━\n"
-                 f"*Топ-{min(5,len(results))}:*\n\n"]
+        lines = [f"⚡  Смарт-пул готов — {len(results)} серверов\n\n"]
+        lines.append(f"Топ-{min(5, len(results))}:\n\n")
         for i, r in enumerate(results[:5], 1):
             lines.append(
-                f"{i}. {proto_icon(r['type'])}  `{r['host']}:{r['port']}`\n"
-                f"    {ping_bar(r['ping'])}  `{r['ping']} ms`\n\n"
+                f"{i}. {proto_icon(r['type'])}  {r['host']}:{r['port']}\n"
+                f"   {ping_bar(r['ping'])}  {r['ping']} ms\n\n"
             )
-        lines.append("━━━━━━━━━━━━━━━━━━━━━\n"
-                     "_Используются автоматически при /connect_")
-        bot.edit_message_text(
-            "".join(lines), msg.chat.id, wait.message_id,
-            parse_mode="Markdown",
-            reply_markup=kb_main(get_user(msg.from_user.id)["connected"]))
+        lines.append("Используются автоматически при /connect")
+        try:
+            bot.edit_message_text(
+                "".join(lines), chat_id, mid,
+                reply_markup=kb_main(get_user(msg.from_user.id)["connected"]))
+        except:
+            pass
 
     threading.Thread(target=do, daemon=True).start()
 
@@ -1087,36 +1128,41 @@ def cmd_connect(msg):
         mode_txt = (f"Режим: `{label}` · в пуле: `{fast_n}` серверов"
                     if fast_n else f"Режим: `{label}` · полный поиск")
 
-        bot.edit_message_text(
-            f"🔄  *Поиск сервера [{label}]*\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📍  Ваш IP: `{my_ip}`\n"
-            f"{mode_txt}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"{loading_bar(0)}  начинаю...",
-            msg.chat.id, wait.message_id, parse_mode="Markdown")
-
-        info      = {"n": 0, "last_h": ""}
+        chat_id2 = msg.chat.id
+        mid2     = wait.message_id
         last_edit = [0.0]
 
-        def on_try(n, pt, h, p):
-            info["n"]    = n
-            info["last_h"] = f"{h}:{p}"
+        def _upd(text):
             now = time.time()
-            if now - last_edit[0] >= 1.6:
-                last_edit[0] = now
-                try:
-                    bot.edit_message_text(
-                        f"🔄  *Поиск сервера [{label}]*\n\n"
-                        f"━━━━━━━━━━━━━━━━━━━━━\n"
-                        f"📍  Ваш IP: `{my_ip}`\n"
-                        f"{proto_icon(pt)}  Тест: `{h}:{p}`\n"
-                        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
-                        f"{loading_bar(min(n, VERIFY_LIMIT), VERIFY_LIMIT)}"
-                        f"  попытка {n}",
-                        msg.chat.id, wait.message_id, parse_mode="Markdown")
-                except:
-                    pass
+            if now - last_edit[0] < 1.6:
+                return
+            last_edit[0] = now
+            try:
+                bot.edit_message_text(text, chat_id2, mid2)
+            except:
+                pass
+
+        fast_n = len([p for p in cache["top_fast"]
+                      if not pfilter or p["type"] == pfilter])
+
+        if fast_n:
+            _upd(f"🔄  Подключаюсь [{label}]\n\n"
+                 f"📍  Ваш IP: {my_ip}\n"
+                 f"⚡  Проверяю {fast_n} быстрых серверов из пула...")
+        else:
+            _upd(f"🔄  Подключаюсь [{label}]\n\n"
+                 f"📍  Ваш IP: {my_ip}\n"
+                 f"🔍  Запускаю полный поиск...")
+
+        last_edit[0] = 0.0  # сбрасываем чтобы следующий апдейт прошёл
+        info = {"n": 0}
+
+        def on_try(n, pt, h, p):
+            info["n"] = n
+            _upd(f"🔄  Подключаюсь [{label}]\n\n"
+                 f"📍  Ваш IP: {my_ip}\n"
+                 f"{proto_icon(pt)}  Тест: {h}:{p}\n"
+                 f"{loading_bar(min(n, 200), 200)}  попытка {n}")
 
         res = find_best_proxy(my_ip, ptype_filter=pfilter, on_try=on_try)
 
@@ -1213,17 +1259,19 @@ def cmd_rotate(msg):
         info      = {"n": 0}
         last_edit = [0.0]
 
+        last_edit2 = [0.0]
+
         def on_try(n, pt, h, p):
             info["n"] = n
             now = time.time()
-            if now - last_edit[0] >= 1.6:
-                last_edit[0] = now
+            if now - last_edit2[0] >= 1.6:
+                last_edit2[0] = now
                 try:
                     bot.edit_message_text(
-                        f"🔄  *Ищу новый IP*\n\n"
-                        f"{proto_icon(pt)}  `{h}:{p}`\n"
-                        f"{loading_bar(min(n, 80), 80)}  попытка {n}",
-                        msg.chat.id, wait.message_id, parse_mode="Markdown")
+                        f"🔄  Меняю IP...\n\n"
+                        f"{proto_icon(pt)}  {h}:{p}\n"
+                        f"{loading_bar(min(n, 200), 200)}  попытка {n}",
+                        msg.chat.id, wait.message_id)
                 except:
                     pass
 
