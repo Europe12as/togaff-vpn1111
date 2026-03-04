@@ -104,7 +104,7 @@ def access_required(fn):
                 "🔒  *Доступ закрыт*\n\n"
                 "Этот бот работает только по приглашению.\n"
                 "Обратись к администратору для получения доступа.",
-                parse_mode="Markdown")
+                parse_mode="MarkdownV2")
             return
         return fn(msg_or_call, *args, **kwargs)
     wrapper.__name__ = fn.__name__
@@ -1553,4 +1553,3 @@ if __name__ == "__main__":
     threading.Thread(target=auto_refresh, daemon=True).start()
 
     bot.infinity_polling(timeout=30, long_polling_timeout=20)
-
