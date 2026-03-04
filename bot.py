@@ -1,15 +1,3 @@
-"""
-╔══════════════════════════════════════════════════════╗
-║          TOGAFF VPN  ·  Ultimate Edition             ║
-║  Admin panel · Access control · Smart proxy engine   ║
-╚══════════════════════════════════════════════════════╝
-
-  Установка зависимостей:
-  pip install pyTelegramBotAPI requests[socks] PySocks urllib3
-
-  Запуск:  python3 togaff_vpn_bot.py
-"""
-
 import telebot
 import requests
 import socket
@@ -1565,3 +1553,4 @@ if __name__ == "__main__":
     threading.Thread(target=auto_refresh, daemon=True).start()
 
     bot.infinity_polling(timeout=30, long_polling_timeout=20)
+
