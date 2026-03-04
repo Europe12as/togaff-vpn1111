@@ -45,22 +45,6 @@ bot = telebot.TeleBot(TOKEN, parse_mode=None)
 #             УПРАВЛЕНИЕ ДОСТУПОМ (WHITELIST)
 # ══════════════════════════════════════════════════════
 
-def _load_json(path, default):
-    try:
-        if os.path.exists(path):
-            with open(path, "r") as f:
-                return json.load(f)
-    except:
-        pass
-    return default
-
-def _save_json(path, data):
-    try:
-        with open(path, "w") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except:
-        pass
-
 # allowed_users = {uid: {"username":..., "first_name":..., "added":..., "uses":0}}
 allowed_users: dict = _load_json(USERS_FILE, {})
 banned_users:  set  = set(_load_json(BANNED_FILE, []))
