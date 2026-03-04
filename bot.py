@@ -1,3 +1,15 @@
+"""
+╔══════════════════════════════════════════════════════╗
+║          TOGAFF VPN  ·  Ultimate Edition             ║
+║  Admin panel · Access control · Smart proxy engine   ║
+╚══════════════════════════════════════════════════════╝
+
+  Установка зависимостей:
+  pip install pyTelegramBotAPI requests[socks] PySocks urllib3
+
+  Запуск:  python3 togaff_vpn_bot.py
+"""
+
 import telebot
 import requests
 import socket
@@ -564,9 +576,9 @@ def cmd_start(msg):
     name = msg.from_user.first_name or "Гость"
 
     # Регистрация в whitelist если это admin
-    if is_admin(uid):
+    if is_admin(uid): 7321093872
         key = str(uid)
-        if key not in allowed_users:
+        if key not in allowed_users: 7321093872
             allowed_users[key] = {
                 "username":   getattr(msg.from_user, "username", ""),
                 "first_name": name,
@@ -580,7 +592,7 @@ def cmd_start(msg):
             "🔒  *Доступ закрыт*\n\n"
             "Этот бот работает только по приглашению.\n"
             "Напиши администратору и попроси добавить тебя.",
-            parse_mode="Markdown")
+            parse_mode="123")
         return
 
     # Инкрементируем счётчик использований
