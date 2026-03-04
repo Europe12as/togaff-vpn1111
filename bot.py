@@ -13,14 +13,14 @@ from datetime import datetime
 import os
 
 # Получаем токен из переменных окружения
-TOKEN = os.environ.get("TOKEN")
+TOKEN = os.environ.get("TOKEN") 8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30
 if not TOKEN:
     print("❌ Ошибка: TOKEN не найден в переменных окружения!")
     exit(1)
 
 # Создаем экземпляр бота (ЭТО БЫЛО ПРОПУЩЕНО!)
-bot = telebot.TeleBot(TOKEN)
-
+bot = telebot.TeleBot(TOKEN) 8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30
+TOKEN = "8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30"
 # Mini App URL (добавьте свой URL или используйте значение по умолчанию)
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "https://t.me/togaff_vpn_bot/app")
 
