@@ -3,50 +3,106 @@ import requests
 import socket
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import random
+import re
 
-# ══════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
+#  ТОКЕН
 TOKEN = "8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30"
-# ══════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 
 MINI_APP_URL = "https://YOUR_USERNAME.github.io/togaff-vpn/"
 
+# ── Проверка PySocks ──────────────────────────────────────
+try:
+    import socks  # noqa
+    SOCKS_OK = True
+except ImportError:
+    SOCKS_OK = False
+    print("⚠  Установи: pip install PySocks requests[socks]")
+
 bot = telebot.TeleBot(TOKEN)
 
-PROXIES = [
-    ("185.221.160.253", 80),  ("185.221.160.214", 80),
-    ("87.239.31.42",    80),  ("109.197.153.121", 8888),
-    ("188.235.146.220", 80),  ("94.26.241.120",   80),
-    ("89.23.112.143",   80),  ("91.222.238.112",  80),
-    ("82.208.111.19", 8080),  ("185.244.173.101", 80),
-    ("185.221.152.147", 80),  ("91.107.124.250",  80),
-    ("212.96.201.54",  80),   ("5.180.241.126",   80),
-    ("195.91.179.91",  80),   ("95.217.105.20",   80),
-    ("37.120.189.106", 80),   ("89.31.143.1",     80),
-    ("78.47.138.199",  80),   ("89.31.143.2",     80),
-    ("195.201.34.206", 80),   ("89.31.143.3",     80),
-    ("167.86.97.239", 8080),  ("138.201.245.91", 8080),
-    ("89.31.143.12",   80),   ("51.178.43.147",   80),
-    ("87.247.251.24",  80),   ("83.143.145.67",   80),
-    ("85.26.218.76",   80),   ("162.19.226.235",  80),
-    ("5.188.31.212",   80),   ("87.247.251.240",  80),
-    ("207.254.28.68",  80),   ("104.167.29.113",  80),
-    ("116.202.102.255",80),   ("77.238.66.2",     80),
-    ("217.115.115.252",80),   ("85.187.17.39",    80),
-    ("213.135.166.142",80),   ("217.145.93.115",  80),
-    ("141.105.107.34", 80),   ("93.170.73.47",    80),
-    ("31.7.38.227",    80),
-]
+# ══════════════════════════════════════════════════════════
+#  ИСТОЧНИКИ ПРОКСИ (живые GitHub-листы, обновляются каждые ~час)
+# ══════════════════════════════════════════════════════════
+SOURCES = {
+    "socks5": [
+        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
+        "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt",
+        "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/socks5.txt",
+        "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt",
+        "https://raw.githubusercontent.com/roosterkid/openproxylist/main/SOCKS5_RAW.txt",
+        "https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks5.txt",
+    ],
+    "socks4": [
+        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks4.txt",
+        "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/socks4.txt",
+        "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks4.txt",
+        "https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks4.txt",
+    ],
+    "http": [
+        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
+        "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/http.txt",
+        "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt",
+        "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt",
+        "https://raw.githubusercontent.com/mmpx12/proxy-list/master/http.txt",
+    ],
+}
 
+# ── Кэш ──────────────────────────────────────────────────
+cache = {"socks5": [], "socks4": [], "http": [], "updated": 0}
+CACHE_TTL = 1800  # 30 мин
+
+# ── Состояние пользователей ───────────────────────────────
 users = {}
 
 def get_user(uid):
     if uid not in users:
-        users[uid] = {"connected": False, "proxy": None, "connect_time": None}
+        users[uid] = {
+            "connected": False, "proxy": None,
+            "connect_time": None, "ip_before": None, "ip_after": None,
+        }
     return users[uid]
 
-# ── Ping одного прокси ────────────────────────
-def ping_proxy(host, port, timeout=2.0):
+# ══════════════════════════════════════════════════════════
+#  РАБОТА С ПРОКСИ
+# ══════════════════════════════════════════════════════════
+def fetch_list(url, timeout=12):
+    try:
+        r = requests.get(url, timeout=timeout, headers={"User-Agent": "curl/7.80"})
+        if r.status_code != 200:
+            return []
+        result = []
+        for line in r.text.splitlines():
+            m = re.match(r"^(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})", line.strip())
+            if m:
+                result.append((m.group(1), int(m.group(2))))
+        return result
+    except:
+        return []
+
+def refresh_cache():
+    if time.time() - cache["updated"] < CACHE_TTL:
+        return
+    print("↻ Обновляю кэш прокси...")
+    for ptype, urls in SOURCES.items():
+        collected, seen = [], set()
+        for url in urls:
+            for h, p in fetch_list(url):
+                key = f"{h}:{p}"
+                if key not in seen:
+                    seen.add(key)
+                    collected.append((h, p))
+            if len(collected) >= 600:
+                break
+        random.shuffle(collected)
+        cache[ptype] = collected[:400]
+        print(f"  {ptype}: {len(cache[ptype])}")
+    cache["updated"] = time.time()
+    print("✓ Кэш готов")
+
+def tcp_ok(host, port, timeout=2.0):
     try:
         t0 = time.time()
         with socket.create_connection((host, port), timeout=timeout):
@@ -54,457 +110,394 @@ def ping_proxy(host, port, timeout=2.0):
     except:
         return None
 
-# ── ПАРАЛЛЕЛЬНЫЙ поиск — НЕ зависает! ────────
-def get_best_proxy(exclude=None, top_n=20):
-    candidates = [
-        (h, p) for h, p in PROXIES[:top_n]
-        if not (exclude and h == exclude[0])
-    ]
-    results = []
+IP_URLS = [
+    "http://api.ipify.org",
+    "http://checkip.amazonaws.com",
+    "http://icanhazip.com",
+    "http://ip.42.pl/raw",
+]
 
-    def check(host, port):
-        ms = ping_proxy(host, port, timeout=1.5)
-        return (ms, host, port)
+def get_ip(proxy_cfg=None, timeout=8):
+    """Получить внешний IP через прокси или напрямую."""
+    for url in IP_URLS:
+        try:
+            if proxy_cfg:
+                ptype = proxy_cfg["type"]
+                h, p  = proxy_cfg["host"], proxy_cfg["port"]
+                if ptype in ("socks5", "socks4") and SOCKS_OK:
+                    scheme  = "socks5" if ptype == "socks5" else "socks4"
+                    proxies = {"http": f"{scheme}://{h}:{p}", "https": f"{scheme}://{h}:{p}"}
+                else:
+                    proxies = {"http": f"http://{h}:{p}", "https": f"http://{h}:{p}"}
+                r = requests.get(url, proxies=proxies, timeout=timeout)
+            else:
+                r = requests.get(url, timeout=timeout)
+            ip = r.text.strip()
+            if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", ip):
+                return ip
+        except:
+            continue
+    return None
 
-    with ThreadPoolExecutor(max_workers=10) as pool:
-        futures = {pool.submit(check, h, p): (h, p) for h, p in candidates}
-        for future in as_completed(futures):
-            ms, host, port = future.result()
-            if ms is not None:
-                results.append((ms, host, port))
-
-    if not results:
+def verify(ptype, host, port, my_ip):
+    """Вернуть (ms, new_ip) если прокси реально меняет IP, иначе None."""
+    ms = tcp_ok(host, port, timeout=2.0)
+    if not ms:
         return None
-    results.sort()
-    ms, host, port = results[0]
-    return (host, port, ms)
+    cfg    = {"type": ptype, "host": host, "port": port}
+    new_ip = get_ip(proxy_cfg=cfg, timeout=7)
+    if not new_ip or new_ip == my_ip:
+        return None
+    return (ms, new_ip)
 
-# ── Получить IP (HTTP чтобы прокси сработал) ─
-def get_current_ip(proxy=None):
-    try:
-        if proxy:
-            host, port = proxy[0], proxy[1]
-            proxies = {
-                "http":  f"http://{host}:{port}",
-                "https": f"http://{host}:{port}",
-            }
-            r = requests.get("http://api.ipify.org", proxies=proxies, timeout=6)
-        else:
-            r = requests.get("http://api.ipify.org", timeout=6)
-        return r.text.strip()
-    except:
-        return "—"
+def find_proxy(my_ip, preferred=None, exclude=None, limit=80, on_try=None):
+    refresh_cache()
+    order = (["socks5","socks4","http"] if SOCKS_OK else ["http","socks5","socks4"])
+    if preferred and preferred in order:
+        order = [preferred] + [t for t in order if t != preferred]
 
-def fmt_time(secs):
-    h = int(secs // 3600)
-    m = int((secs % 3600) // 60)
-    s = int(secs % 60)
-    return f"{h:02d}:{m:02d}:{s:02d}"
+    n = 0
+    for ptype in order:
+        pool = list(cache[ptype])
+        random.shuffle(pool)
+        for host, port in pool:
+            if n >= limit:
+                return None
+            if exclude and host == exclude:
+                continue
+            n += 1
+            if on_try:
+                on_try(n, ptype, host, port)
+            res = verify(ptype, host, port, my_ip)
+            if res:
+                return {"type": ptype, "host": host, "port": port,
+                        "ping": res[0], "new_ip": res[1]}
+    return None
 
-def ping_bar(ms):
-    blocks = min(10, max(1, int(10 - ms / 30)))
-    return "█" * blocks + "░" * (10 - blocks)
+# ══════════════════════════════════════════════════════════
+#  UI ХЕЛПЕРЫ
+# ══════════════════════════════════════════════════════════
+def fmt_t(s):
+    return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d}"
 
-# ── Живая анимация ожидания ───────────────────
-class LoadingAnimation:
-    FRAMES = {
-        "search": [
-            "🔍 Ищу лучший сервер ·  ",
-            "🔍 Ищу лучший сервер ·· ",
-            "🔍 Ищу лучший сервер ···",
-            "🔎 Проверяю серверы ·· ",
-            "🔎 Проверяю серверы ·  ",
-        ],
-        "rotate": [
-            "🔄 Меняю IP адрес ·  ",
-            "🔄 Меняю IP адрес ·· ",
-            "🔄 Меняю IP адрес ···",
-            "♻️  Выбираю сервер ·· ",
-            "♻️  Выбираю сервер ·  ",
-        ],
-        "scan": [
-            "📡 Сканирую серверы ·  ",
-            "📡 Сканирую серверы ·· ",
-            "📡 Сканирую серверы ···",
-            "🛰️  Пингую серверы ··  ",
-            "🛰️  Пингую серверы ·   ",
-        ],
-        "ip": [
-            "🌐 Определяю IP ·  ",
-            "🌐 Определяю IP ·· ",
-            "🌐 Определяю IP ···",
-        ],
-    }
+def t_icon(t): return {"socks5":"⬛","socks4":"◼","http":"▪"}.get(t,"▫")
+def p_icon(ms):
+    if ms is None: return "✖"
+    return "◆" if ms<150 else "◇" if ms<300 else "○"
 
-    def __init__(self, chat_id, message_id, kind="search"):
-        self.chat_id    = chat_id
-        self.message_id = message_id
-        self.frames     = self.FRAMES[kind]
-        self._stop      = threading.Event()
-        self._thread    = threading.Thread(target=self._run, daemon=True)
-
-    def start(self):
-        self._thread.start()
-        return self
-
-    def stop(self):
-        self._stop.set()
-        self._thread.join(timeout=2)
-
-    def _run(self):
-        i = 0
-        while not self._stop.is_set():
-            try:
-                bot.edit_message_text(
-                    self.frames[i % len(self.frames)],
-                    self.chat_id,
-                    self.message_id
-                )
-            except:
-                pass
-            i += 1
-            self._stop.wait(0.55)
-
-
-# ── Клавиатуры ────────────────────────────────
-def main_keyboard(connected=False):
+def keyboard(connected=False):
     kb = telebot.types.InlineKeyboardMarkup(row_width=2)
     if connected:
         kb.add(
-            telebot.types.InlineKeyboardButton("🔴 Отключить",  callback_data="disconnect"),
-            telebot.types.InlineKeyboardButton("🔀 Сменить IP", callback_data="rotate"),
+            telebot.types.InlineKeyboardButton("◼ ОТКЛЮЧИТЬ",   callback_data="disconnect"),
+            telebot.types.InlineKeyboardButton("↻ СМЕНИТЬ IP",  callback_data="rotate"),
         )
     else:
-        kb.add(
-            telebot.types.InlineKeyboardButton("🟢 Подключиться", callback_data="connect"),
-        )
+        kb.add(telebot.types.InlineKeyboardButton("◻ ПОДКЛЮЧИТЬ", callback_data="connect"))
     kb.add(
-        telebot.types.InlineKeyboardButton("📊 Статус",  callback_data="status"),
-        telebot.types.InlineKeyboardButton("🛰 Серверы", callback_data="proxies"),
+        telebot.types.InlineKeyboardButton("▣ СТАТУС",  callback_data="status"),
+        telebot.types.InlineKeyboardButton("▤ ПРОКСИ",  callback_data="proxies"),
     )
     kb.add(
-        telebot.types.InlineKeyboardButton(
-            "🌐 Открыть VPN интерфейс",
-            web_app=telebot.types.WebAppInfo(url=MINI_APP_URL)
-        )
+        telebot.types.InlineKeyboardButton("⬛ SOCKS5", callback_data="c_socks5"),
+        telebot.types.InlineKeyboardButton("◼ SOCKS4",  callback_data="c_socks4"),
+        telebot.types.InlineKeyboardButton("▪ HTTP",    callback_data="c_http"),
     )
+    kb.add(telebot.types.InlineKeyboardButton(
+        "⊞ VPN ИНТЕРФЕЙС",
+        web_app=telebot.types.WebAppInfo(url=MINI_APP_URL)))
     return kb
 
-# ── /start ────────────────────────────────────
+class FM:  # FakeMessage
+    def __init__(self, call, text=""):
+        self.chat      = type("C",(),{"id":call.message.chat.id})()
+        self.from_user = type("U",(),{"id":call.from_user.id,
+                                      "first_name":call.from_user.first_name or "User"})()
+        self.text = text
+
+# ══════════════════════════════════════════════════════════
+#  КОМАНДЫ
+# ══════════════════════════════════════════════════════════
 @bot.message_handler(commands=["start"])
-def cmd_start(msg):
-    uid  = msg.from_user.id
-    u    = get_user(uid)
-    name = msg.from_user.first_name or "Пользователь"
-
-    if u["connected"] and u["proxy"]:
-        h, p, ms = u["proxy"]
-        status = f"🟢 *Подключён* — `{h}:{p}`"
-    else:
-        status = "🔴 *Отключён*"
-
-    text = (
-        f"🛡 *TOGAFF VPN*\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"👋 Привет, *{name}*!\n"
-        f"Статус: {status}\n\n"
+def c_start(msg):
+    u    = get_user(msg.from_user.id)
+    name = msg.from_user.first_name or "User"
+    st   = "[ ■ АКТИВЕН ]" if u["connected"] else "[ □ НЕАКТИВЕН ]"
+    total = sum(len(cache[t]) for t in ["socks5","socks4","http"])
+    bot.send_message(msg.chat.id,
+        f"```\n"
+        f"╔══════════════════════════════╗\n"
+        f"║        TOGAFF  VPN           ║\n"
+        f"║   Anonymous Proxy Gateway    ║\n"
+        f"╚══════════════════════════════╝\n"
+        f"```\n"
+        f"◈ Пользователь: *{name}*\n"
+        f"◈ Статус: `{st}`\n\n"
+        f"```\n"
+        f"Протоколы:  SOCKS5 · SOCKS4 · HTTP\n"
+        f"PySocks:    {'✓ активен' if SOCKS_OK else '✗ нет (pip install PySocks)'}\n"
+        f"Кэш:        {total} прокси\n"
+        f"Проверка:   РЕАЛЬНАЯ смена IP\n"
+        f"```\n\n"
         f"*Команды:*\n"
-        f"🟢 /connect — подключиться\n"
-        f"🔴 /disconnect — отключиться\n"
-        f"🔀 /rotate — сменить IP\n"
-        f"📊 /status — текущий статус\n"
-        f"🛰 /proxies — список серверов\n"
-        f"🌐 /ip — мой IP адрес\n"
-    )
-    bot.send_message(msg.chat.id, text, parse_mode="Markdown",
-                     reply_markup=main_keyboard(u["connected"]))
+        f"`/connect`           — авто (SOCKS5→4→HTTP)\n"
+        f"`/connect socks5`    — только SOCKS5\n"
+        f"`/connect socks4`    — только SOCKS4\n"
+        f"`/connect http`      — только HTTP\n"
+        f"`/disconnect` · `/rotate` · `/status`\n"
+        f"`/ip` · `/refresh` · `/proxies`",
+        parse_mode="Markdown", reply_markup=keyboard(u["connected"]))
 
-# ── /connect ──────────────────────────────────
+@bot.message_handler(commands=["refresh"])
+def c_refresh(msg):
+    wait = bot.send_message(msg.chat.id,
+        "```\n[ ОБНОВЛЯЮ СПИСКИ... ]\n```", parse_mode="Markdown")
+    def do():
+        cache["updated"] = 0
+        refresh_cache()
+        total = sum(len(cache[t]) for t in ["socks5","socks4","http"])
+        bot.edit_message_text(
+            f"```\n╔═════════════════╗\n║ ПРОКСИ ОБНОВЛЕНЫ║\n╚═════════════════╝\n```\n"
+            f"⬛ SOCKS5: `{len(cache['socks5'])}`\n"
+            f"◼  SOCKS4: `{len(cache['socks4'])}`\n"
+            f"▪  HTTP:   `{len(cache['http'])}`\n"
+            f"◈  Итого:  `{total}`",
+            msg.chat.id, wait.message_id, parse_mode="Markdown",
+            reply_markup=keyboard(get_user(msg.from_user.id)["connected"]))
+    threading.Thread(target=do, daemon=True).start()
+
 @bot.message_handler(commands=["connect"])
-def cmd_connect(msg):
+def c_connect(msg):
     uid = msg.from_user.id
     u   = get_user(uid)
+    parts     = (msg.text or "").strip().split()
+    preferred = parts[1].lower() if len(parts)>1 and parts[1] in ("socks5","socks4","http") else None
 
     if u["connected"]:
-        h, p, _ = u["proxy"]
-        bot.send_message(
-            msg.chat.id,
-            f"✅ Уже подключён к `{h}:{p}`\n\n"
-            f"🔀 /rotate — сменить IP\n"
-            f"🔴 /disconnect — отключиться",
-            parse_mode="Markdown",
-            reply_markup=main_keyboard(True)
-        )
+        px = u["proxy"]
+        bot.send_message(msg.chat.id,
+            f"◈ Уже подключён: `{px['host']}:{px['port']}`\n/rotate или /disconnect",
+            parse_mode="Markdown", reply_markup=keyboard(True))
         return
 
-    wait = bot.send_message(msg.chat.id, "🔍 Ищу лучший сервер ·  ")
-    anim = LoadingAnimation(msg.chat.id, wait.message_id, "search").start()
+    wait = bot.send_message(msg.chat.id,
+        "```\n[ ОПРЕДЕЛЯЮ ВАШ IP... ]\n```", parse_mode="Markdown")
 
-    def do_connect():
-        result = get_best_proxy()
-        anim.stop()
-        if result:
-            host, port, ms = result
-            u.update(connected=True, proxy=(host, port, ms), connect_time=time.time())
-            ip  = get_current_ip((host, port))
-            bar = ping_bar(ms)
-            try:
-                bot.edit_message_text(
-                    f"✅ *Подключение установлено!*\n"
-                    f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"🖥 Сервер:      `{host}:{port}`\n"
-                    f"⚡ Пинг:        `{ms} ms`\n"
-                    f"📶 Сигнал:      `{bar}`\n"
-                    f"🌐 Ваш IP:      `{ip}`\n\n"
-                    f"🔐 Шифрование:  `AES-256-GCM`\n"
-                    f"🛡 DNS-HTTPS:   `✓`\n"
-                    f"👁 Leak protect:`✓`\n\n"
-                    f"_Вы анонимны~ 🎭_",
-                    msg.chat.id, wait.message_id,
-                    parse_mode="Markdown",
-                    reply_markup=main_keyboard(True)
-                )
-            except: pass
+    def do():
+        my_ip = get_ip(timeout=6) or "unknown"
+        u["ip_before"] = my_ip
+        label = preferred.upper() if preferred else "AUTO"
+
+        bot.edit_message_text(
+            f"```\n[ ПОИСК [{label}] ]\nВаш IP: {my_ip}\nПроверяю реальную смену...\n```",
+            msg.chat.id, wait.message_id, parse_mode="Markdown")
+
+        info = {"n":0}
+        def on_try(n, pt, h, p):
+            info["n"] = n
+            if n % 6 == 0:
+                try:
+                    bot.edit_message_text(
+                        f"```\n[ ПОИСК [{label}] — попытка {n} ]\n"
+                        f"Тест: {pt}://{h}:{p}\n"
+                        f"Ваш IP: {my_ip}\n```",
+                        msg.chat.id, wait.message_id, parse_mode="Markdown")
+                except: pass
+
+        res = find_proxy(my_ip, preferred=preferred, limit=100, on_try=on_try)
+
+        if res:
+            u.update(connected=True, proxy=res,
+                     connect_time=time.time(), ip_after=res["new_ip"])
+            bot.edit_message_text(
+                f"```\n"
+                f"╔══════════════════════════════╗\n"
+                f"║     ПОДКЛЮЧЕНИЕ АКТИВНО      ║\n"
+                f"╚══════════════════════════════╝\n"
+                f"```\n"
+                f"{t_icon(res['type'])} Протокол:    `{res['type'].upper()}`\n"
+                f"◈ Сервер:      `{res['host']}:{res['port']}`\n"
+                f"{p_icon(res['ping'])} Пинг:        `{res['ping']}ms`\n"
+                f"◈ Ваш IP до:  `{my_ip}`\n"
+                f"◆ Ваш IP теперь: `{res['new_ip']}`\n\n"
+                f"```\n■ IP СМЕНЁН  ■ АНОНИМНОСТЬ АКТИВНА\n```",
+                msg.chat.id, wait.message_id, parse_mode="Markdown",
+                reply_markup=keyboard(True))
         else:
-            try:
-                bot.edit_message_text(
-                    "❌ *Нет доступных серверов*\n\n"
-                    "Попробуй через несколько секунд 🔄\n"
-                    "/connect — попробовать снова",
-                    msg.chat.id, wait.message_id,
-                    parse_mode="Markdown",
-                    reply_markup=main_keyboard(False)
-                )
-            except: pass
+            bot.edit_message_text(
+                f"```\n[ ОШИБКА: не найден рабочий прокси ]\n"
+                f"Проверено: {info['n']} серверов\n"
+                f"Попробуй /refresh → /connect\n```",
+                msg.chat.id, wait.message_id, parse_mode="Markdown",
+                reply_markup=keyboard(False))
 
-    threading.Thread(target=do_connect, daemon=True).start()
+    threading.Thread(target=do, daemon=True).start()
 
-# ── /disconnect ───────────────────────────────
 @bot.message_handler(commands=["disconnect"])
-def cmd_disconnect(msg):
+def c_disconnect(msg):
     uid = msg.from_user.id
     u   = get_user(uid)
-
     if not u["connected"]:
-        bot.send_message(
-            msg.chat.id,
-            "ℹ️ VPN уже отключён\n\n🟢 /connect — подключиться",
-            reply_markup=main_keyboard(False)
-        )
+        bot.send_message(msg.chat.id, "```\n[ VPN уже отключён ]\n```",
+            parse_mode="Markdown", reply_markup=keyboard(False))
         return
-
-    session = ""
-    if u["connect_time"]:
-        session = f"\n⏱ Сессия: `{fmt_time(time.time() - u['connect_time'])}`"
-
+    sess = fmt_t(time.time()-u["connect_time"]) if u["connect_time"] else "—"
+    ib, ia = u.get("ip_before","—"), u.get("ip_after","—")
     u.update(connected=False, proxy=None, connect_time=None)
+    bot.send_message(msg.chat.id,
+        f"```\n╔══════════════════════╗\n║    VPN ОТКЛЮЧЁН      ║\n╚══════════════════════╝\n```\n"
+        f"◈ Сессия:      `{sess}`\n"
+        f"◈ Был IP:      `{ia}`\n"
+        f"◈ Реальный IP: `{ib}`",
+        parse_mode="Markdown", reply_markup=keyboard(False))
 
-    bot.send_message(
-        msg.chat.id,
-        f"🔴 *VPN отключён*{session}\n\n"
-        f"_Ваш реальный IP снова виден 👋_",
-        parse_mode="Markdown",
-        reply_markup=main_keyboard(False)
-    )
-
-# ── /rotate ───────────────────────────────────
 @bot.message_handler(commands=["rotate"])
-def cmd_rotate(msg):
-    uid  = msg.from_user.id
-    u    = get_user(uid)
-    wait = bot.send_message(msg.chat.id, "🔄 Меняю IP адрес ·  ")
-    anim = LoadingAnimation(msg.chat.id, wait.message_id, "rotate").start()
-
-    def do_rotate():
-        exclude = u["proxy"] if u["proxy"] else None
-        result  = get_best_proxy(exclude=exclude)
-        anim.stop()
-        if result:
-            host, port, ms = result
-            u.update(proxy=(host, port, ms), connect_time=time.time(), connected=True)
-            ip  = get_current_ip((host, port))
-            bar = ping_bar(ms)
-            try:
-                bot.edit_message_text(
-                    f"🔀 *IP успешно сменён!*\n"
-                    f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"🖥 Новый сервер: `{host}:{port}`\n"
-                    f"⚡ Пинг:         `{ms} ms`\n"
-                    f"📶 Сигнал:       `{bar}`\n"
-                    f"🌐 Новый IP:     `{ip}`\n\n"
-                    f"_Новая личность активирована 🕵️_",
-                    msg.chat.id, wait.message_id,
-                    parse_mode="Markdown",
-                    reply_markup=main_keyboard(True)
-                )
-            except: pass
-        else:
-            try:
-                bot.edit_message_text(
-                    "❌ Нет альтернативных серверов\n/rotate — попробовать снова",
-                    msg.chat.id, wait.message_id,
-                    reply_markup=main_keyboard(u["connected"])
-                )
-            except: pass
-
-    threading.Thread(target=do_rotate, daemon=True).start()
-
-# ── /status ───────────────────────────────────
-@bot.message_handler(commands=["status"])
-def cmd_status(msg):
+def c_rotate(msg):
     uid = msg.from_user.id
     u   = get_user(uid)
+    if not u["connected"]:
+        bot.send_message(msg.chat.id, "◈ Сначала /connect"); return
 
-    if u["connected"] and u["proxy"]:
-        h, p, ms = u["proxy"]
-        session  = fmt_time(time.time() - u["connect_time"]) if u["connect_time"] else "—"
-        live_ms  = ping_proxy(h, p, timeout=2)
-        if live_ms:
-            bar      = ping_bar(live_ms)
-            ping_str = f"`{live_ms} ms` `{bar}`"
+    wait = bot.send_message(msg.chat.id,
+        "```\n[ СМЕНА IP... ]\n```", parse_mode="Markdown")
+
+    def do():
+        my_ip   = u.get("ip_before") or get_ip() or "unknown"
+        exclude = u["proxy"]["host"] if u["proxy"] else None
+        info    = {"n":0}
+
+        def on_try(n,pt,h,p):
+            info["n"] = n
+            if n % 6 == 0:
+                try:
+                    bot.edit_message_text(
+                        f"```\n[ СМЕНА IP — попытка {n} ]\nТест: {pt}://{h}:{p}\n```",
+                        msg.chat.id, wait.message_id, parse_mode="Markdown")
+                except: pass
+
+        res = find_proxy(my_ip, exclude=exclude, limit=80, on_try=on_try)
+        if res:
+            u.update(proxy=res, connect_time=time.time(), ip_after=res["new_ip"])
+            bot.edit_message_text(
+                f"```\n╔══════════════════════╗\n║      IP СМЕНЁН       ║\n╚══════════════════════╝\n```\n"
+                f"{t_icon(res['type'])} Протокол: `{res['type'].upper()}`\n"
+                f"◈ Сервер:   `{res['host']}:{res['port']}`\n"
+                f"{p_icon(res['ping'])} Пинг:     `{res['ping']}ms`\n"
+                f"◆ Новый IP: `{res['new_ip']}`",
+                msg.chat.id, wait.message_id, parse_mode="Markdown",
+                reply_markup=keyboard(True))
         else:
-            ping_str = "❌ `недоступен`"
+            bot.edit_message_text(
+                f"```\n[ Нет рабочих — попробуй /refresh ]\n```",
+                msg.chat.id, wait.message_id, parse_mode="Markdown",
+                reply_markup=keyboard(True))
 
+    threading.Thread(target=do, daemon=True).start()
+
+@bot.message_handler(commands=["status"])
+def c_status(msg):
+    uid = msg.from_user.id
+    u   = get_user(uid)
+    if u["connected"] and u["proxy"]:
+        px   = u["proxy"]
+        sess = fmt_t(time.time()-u["connect_time"]) if u["connect_time"] else "—"
+        ms   = tcp_ok(px["host"], px["port"], timeout=2)
+        anon = "◆ ВЫСОКАЯ (SOCKS5)" if px["type"]=="socks5" else "◇ СРЕДНЯЯ"
         text = (
-            f"📊 *Статус TOGAFF VPN*\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🟢 Статус:        `АКТИВЕН`\n"
-            f"🖥 Сервер:         `{h}:{p}`\n"
-            f"⚡ Пинг:           {ping_str}\n"
-            f"⏱ Сессия:         `{session}`\n\n"
-            f"🔐 AES-256-GCM:   `✓`\n"
-            f"🛡 DNS-over-HTTPS:`✓`\n"
-            f"🚫 IP Leak:       `защищён ✓`\n"
-            f"👁 Слежка:        `заблокирована ✓`\n"
+            f"```\n╔══════════════════════════════╗\n║     TOGAFF VPN STATUS        ║\n╚══════════════════════════════╝\n```\n"
+            f"◈ Статус:      `■ АКТИВЕН`\n"
+            f"{t_icon(px['type'])} Протокол:    `{px['type'].upper()}`\n"
+            f"◈ Сервер:      `{px['host']}:{px['port']}`\n"
+            f"◈ Пинг:        `{f'{ms}ms' if ms else 'недоступен'}`\n"
+            f"◈ Сессия:      `{sess}`\n"
+            f"◈ IP до:       `{u.get('ip_before','—')}`\n"
+            f"◆ IP сейчас:   `{u.get('ip_after','—')}`\n\n"
+            f"```\nАнонимность:  {anon}\nAES-256-GCM:  ■\nDNS-HTTPS:    ■\nLeak Protect: ■\n```"
         )
     else:
+        total = sum(len(cache[t]) for t in ["socks5","socks4","http"])
         text = (
-            f"📊 *Статус TOGAFF VPN*\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🔴 Статус: `ОТКЛЮЧЁН`\n\n"
-            f"⚠️ Ваш IP *виден* всем сайтам\n"
-            f"🟢 /connect — включить защиту\n"
+            f"```\n╔══════════════════════════════╗\n║     TOGAFF VPN STATUS        ║\n╚══════════════════════════════╝\n```\n"
+            f"◈ Статус: `□ ОТКЛЮЧЁН`\n\n"
+            f"```\nКэш: SOCKS5={len(cache['socks5'])} SOCKS4={len(cache['socks4'])} HTTP={len(cache['http'])}\nИтого={total}\n```\n"
+            f"/connect для подключения"
         )
-
     bot.send_message(msg.chat.id, text, parse_mode="Markdown",
-                     reply_markup=main_keyboard(u["connected"]))
+        reply_markup=keyboard(u["connected"]))
 
-# ── /proxies ──────────────────────────────────
 @bot.message_handler(commands=["proxies"])
-def cmd_proxies(msg):
-    wait = bot.send_message(msg.chat.id, "📡 Сканирую серверы ·  ")
-    anim = LoadingAnimation(msg.chat.id, wait.message_id, "scan").start()
+def c_proxies(msg):
+    uid   = msg.from_user.id
+    total = sum(len(cache[t]) for t in ["socks5","socks4","http"])
+    if total == 0:
+        bot.send_message(msg.chat.id, "```\n[ Кэш пуст — /refresh ]\n```",
+            parse_mode="Markdown"); return
+    lines = ["```\n╔══════════════════════════╗\n║      КЭШ ПРОКСИ          ║\n╚══════════════════════════╝\n```\n"]
+    for pt in ["socks5","socks4","http"]:
+        lines.append(f"{t_icon(pt)} *{pt.upper()}* — {len(cache[pt])} шт")
+        for h,p in cache[pt][:4]:
+            lines.append(f"  `{h}:{p}`")
+        lines.append("")
+    lines.append(f"_Итого: {total} · /refresh для обновления_")
+    bot.send_message(msg.chat.id, "\n".join(lines), parse_mode="Markdown",
+        reply_markup=keyboard(get_user(uid)["connected"]))
 
-    def do_scan():
-        results = []
-
-        def check(host, port):
-            ms = ping_proxy(host, port, timeout=1.5)
-            return (ms, host, port)
-
-        with ThreadPoolExecutor(max_workers=15) as pool:
-            futures = {pool.submit(check, h, p): (h, p) for h, p in PROXIES[:20]}
-            for future in as_completed(futures):
-                results.append(future.result())
-
-        anim.stop()
-        results.sort(key=lambda x: (x[0] is None, x[0] or 9999))
-        alive = sum(1 for ms, _, _ in results if ms is not None)
-
-        lines = [
-            f"🛰 *Серверы TOGAFF VPN*\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"Онлайн: *{alive}/{len(results)}* серверов\n"
-        ]
-
-        for ms, host, port in results[:15]:
-            if ms is not None:
-                if ms < 100:   icon, q = "🟢", "отлично"
-                elif ms < 200: icon, q = "🟡", "хорошо"
-                else:          icon, q = "🟠", "медленно"
-                lines.append(f"{icon} `{host}:{port}` — `{ms}ms` _{q}_")
-            else:
-                lines.append(f"⚫ `{host}:{port}` — _офлайн_")
-
-        lines.append(f"\n_Показано 15 из {len(PROXIES)} серверов_")
-
-        try:
-            bot.edit_message_text(
-                "\n".join(lines),
-                msg.chat.id, wait.message_id,
-                parse_mode="Markdown",
-                reply_markup=main_keyboard(get_user(msg.from_user.id)["connected"])
-            )
-        except: pass
-
-    threading.Thread(target=do_scan, daemon=True).start()
-
-# ── /ip ───────────────────────────────────────
 @bot.message_handler(commands=["ip"])
-def cmd_ip(msg):
+def c_ip(msg):
     uid  = msg.from_user.id
     u    = get_user(uid)
-    wait = bot.send_message(msg.chat.id, "🌐 Определяю IP ·  ")
-    anim = LoadingAnimation(msg.chat.id, wait.message_id, "ip").start()
-
-    def do_ip():
-        proxy = u["proxy"] if u["connected"] else None
-        ip    = get_current_ip(proxy)
-        anim.stop()
-        if proxy:
-            h, p = proxy[0], proxy[1]
-            text = (
-                f"🌐 *Ваш IP адрес*\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"🟢 Режим:  `через VPN`\n"
-                f"🎭 IP:     `{ip}`\n"
-                f"🖥 Сервер: `{h}:{p}`\n\n"
-                f"_Реальный IP скрыт ✓_"
-            )
+    wait = bot.send_message(msg.chat.id, "```\n[ ОПРЕДЕЛЯЮ IP... ]\n```", parse_mode="Markdown")
+    def do():
+        if u["connected"] and u["proxy"]:
+            ip   = get_ip(proxy_cfg=u["proxy"], timeout=8)
+            mode = f"{u['proxy']['type'].upper()} прокси"
         else:
-            text = (
-                f"🌐 *Ваш IP адрес*\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"🔴 Режим: `прямое соединение`\n"
-                f"👁 IP:    `{ip}`\n\n"
-                f"⚠️ _Ваш IP виден всем! /connect_"
-            )
-        try:
-            bot.edit_message_text(text, msg.chat.id, wait.message_id, parse_mode="Markdown")
-        except: pass
+            ip   = get_ip(timeout=6)
+            mode = "прямое соединение"
+        bot.edit_message_text(
+            f"```\n╔═══════════════════╗\n║     ВАШ  IP        ║\n╚═══════════════════╝\n```\n"
+            f"◆ IP:    `{ip or 'недоступен'}`\n◈ Режим: `{mode}`",
+            msg.chat.id, wait.message_id, parse_mode="Markdown")
+    threading.Thread(target=do, daemon=True).start()
 
-    threading.Thread(target=do_ip, daemon=True).start()
-
-# ── Callback (ИСПРАВЛЕНО: правильный uid!) ────
+# ══════════════════════════════════════════════════════════
+#  CALLBACKS
+# ══════════════════════════════════════════════════════════
 @bot.callback_query_handler(func=lambda c: True)
-def handle_callback(call):
-    uid  = call.from_user.id   # ← uid пользователя, не бота!
-    data = call.data
-
-    class FakeMsg:
-        def __init__(self, chat_id, user_id, first_name):
-            self.chat      = type("C", (), {"id": chat_id})()
-            self.from_user = type("U", (), {"id": user_id, "first_name": first_name})()
-
-    fake = FakeMsg(call.message.chat.id, uid, call.from_user.first_name or "User")
-
-    dispatch = {
-        "connect":    (cmd_connect,    "🔍 Ищу сервер..."),
-        "disconnect": (cmd_disconnect, "🔴 Отключаю..."),
-        "rotate":     (cmd_rotate,     "🔀 Меняю IP..."),
-        "status":     (cmd_status,     None),
-        "proxies":    (cmd_proxies,    "📡 Сканирую..."),
+def cb(call):
+    d = call.data
+    m = {
+        "connect":    ("/connect",       "Подключаюсь..."),
+        "c_socks5":   ("/connect socks5","⬛ SOCKS5..."),
+        "c_socks4":   ("/connect socks4","◼ SOCKS4..."),
+        "c_http":     ("/connect http",  "▪ HTTP..."),
+        "disconnect": ("/disconnect",    "Отключаю..."),
+        "rotate":     ("/rotate",        "↻ Меняю IP..."),
+        "status":     ("/status",        ""),
+        "proxies":    ("/proxies",       ""),
     }
+    if d not in m: return
+    cmd_text, answer = m[d]
+    bot.answer_callback_query(call.id, answer)
+    fake = FM(call, cmd_text)
+    {
+        "/connect":        c_connect,
+        "/connect socks5": c_connect,
+        "/connect socks4": c_connect,
+        "/connect http":   c_connect,
+        "/disconnect":     c_disconnect,
+        "/rotate":         c_rotate,
+        "/status":         c_status,
+        "/proxies":        c_proxies,
+    }[cmd_text](fake)
 
-    if data in dispatch:
-        fn, answer = dispatch[data]
-        bot.answer_callback_query(call.id, answer or "")
-        fn(fake)
-
-# ── Запуск ────────────────────────────────────
+# ══════════════════════════════════════════════════════════
+#  ЗАПУСК
+# ══════════════════════════════════════════════════════════
 if __name__ == "__main__":
-    print("🛡  TOGAFF VPN BOT — ЗАПУЩЕН")
-    print(f"📡  Серверов в пуле: {len(PROXIES)}")
-    print(f"🌐  Mini App: {MINI_APP_URL}")
-    print("─" * 40)
+    print("=" * 50)
+    print("  ◆ TOGAFF VPN BOT")
+    print(f"  PySocks: {'✓' if SOCKS_OK else '✗ pip install PySocks requests[socks]'}")
+    print("=" * 50)
+    threading.Thread(target=refresh_cache, daemon=True).start()
     bot.infinity_polling(timeout=30)
