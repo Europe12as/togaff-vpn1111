@@ -30,7 +30,7 @@ TOKEN        = "8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30"
 MINI_APP_URL = "https://t.me/togaff_vpn_bot/app"
 
 # ─── Администратор (твой Telegram ID) ─────────────────
-ADMIN_IDS = {7394153845}   # ← сюда свой ID (узнать: @userinfobot)
+ADMIN_IDS = {7321093872}   # ← сюда свой ID (узнать: @userinfobot)
 
 # ─── Файлы для сохранения данных ──────────────────────
 USERS_FILE  = "allowed_users.json"   # whitelist
@@ -105,18 +105,26 @@ def _uid_key(uid):
 # Декоратор: проверяет доступ перед выполнением
 def access_required(fn):
     def wrapper(msg_or_call, *args, **kwargs):
-        if hasattr(msg_or_call, "from_user"):
-            uid  = msg_or_call.from_user.id
-            chat = msg_or_call.chat.id if hasattr(msg_or_call, "chat") else msg_or_call.message.chat.id
-        else:
-            uid  = msg_or_call.id
-            chat = msg_or_call.id
+        try:
+            uid = msg_or_call.from_user.id
+            # Получаем chat_id безопасно
+            if hasattr(msg_or_call, "chat") and msg_or_call.chat is not None:
+                chat = msg_or_call.chat.id
+            elif hasattr(msg_or_call, "message") and msg_or_call.message is not None:
+                chat = msg_or_call.message.chat.id
+            else:
+                chat = uid
+        except Exception:
+            return
         if not is_allowed(uid):
-            bot.send_message(chat,
-                "🔒  *Доступ закрыт*\n\n"
-                "Этот бот работает только по приглашению.\n"
-                "Обратись к администратору для получения доступа.",
-                parse_mode="Markdown")
+            try:
+                bot.send_message(chat,
+                    "🔒  *Доступ закрыт*\n\n"
+                    "Этот бот работает только по приглашению.\n"
+                    "Обратись к администратору для получения доступа.",
+                    parse_mode="Markdown")
+            except:
+                pass
             return
         return fn(msg_or_call, *args, **kwargs)
     wrapper.__name__ = fn.__name__
@@ -558,7 +566,9 @@ def kb_user_actions(uid):
 class FMsg:
     """Псевдо-сообщение для вызова обработчиков из callback."""
     def __init__(self, call, text=""):
-        self.chat      = type("C", (), {"id": call.message.chat.id})()
+        _chat_id = call.message.chat.id
+        self.chat      = type("C", (), {"id": _chat_id})()
+        self.message   = type("M", (), {"chat": self.chat, "message_id": call.message.message_id})()
         self.from_user = type("U", (), {
             "id":         call.from_user.id,
             "first_name": call.from_user.first_name or "User",
@@ -604,7 +614,7 @@ def cmd_start(msg):
     u     = get_user(uid)
     total = sum(len(cache[t]) for t in ["socks5","socks4","http"])
     fast  = len(cache["top_fast"])
-    admin_badge = "  👑 *Администратор*\n" if is_admin(uid) else ""
+    admin_badge = "\n👑 *Администратор*" if is_admin(uid) else ""
 
     conn_line = (
         f"🟢  *Подключён* — `{u['proxy']['host']}`  {proto_icon(u['proxy']['type'])}"
@@ -613,8 +623,7 @@ def cmd_start(msg):
     )
 
     text = (
-        f"👋  *Привет, {name}!*\n"
-        f"{admin_badge}\n"
+        f"👋  *Привет, {name}!*{admin_badge}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"🛡  *Togaff VPN*  ·  Ultimate\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
