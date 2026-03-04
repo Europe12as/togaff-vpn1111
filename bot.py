@@ -1,28 +1,21 @@
-#!/usr/bin/env python3
-"""
-Togaff VPN — Telegram Bot
-pip install pyTelegramBotAPI requests
-"""
 import telebot
 import requests
 import socket
 import threading
 import time
 import json
-from datetime import datetime
 import os
+from datetime import datetime
 
-# Получаем токен из переменных окружения
-TOKEN = os.environ.get("TOKEN") 8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30
-if not TOKEN:
-    print("❌ Ошибка: TOKEN не найден в переменных окружения!")
-    exit(1)
-
-# Создаем экземпляр бота (ЭТО БЫЛО ПРОПУЩЕНО!)
-bot = telebot.TeleBot(TOKEN) 8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30
+# ══════════════════════════════════════════════
+#  ВСТАВЬ СВОЙ ТОКЕН СЮДА
 TOKEN = "8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30"
-# Mini App URL (добавьте свой URL или используйте значение по умолчанию)
-MINI_APP_URL = os.environ.get("MINI_APP_URL", "https://t.me/togaff_vpn_bot/app")
+# ══════════════════════════════════════════════
+
+# URL твоего Mini App (после деплоя на GitHub Pages)
+MINI_APP_URL = "https://YOUR_USERNAME.github.io/togaff-vpn/"
+
+bot = telebot.TeleBot(TOKEN)
 
 # ── Прокси список ─────────────────────────────
 PROXIES = [
@@ -84,10 +77,8 @@ def get_best_proxy(exclude=None):
 def get_current_ip(proxy=None):
     try:
         if proxy:
-            proxies = {
-                "http": f"http://{proxy[0]}:{proxy[1]}",
-                "https": f"http://{proxy[0]}:{proxy[1]}"
-            }
+            proxies = {"http": f"http://{proxy[0]}:{proxy[1]}",
+                       "https": f"http://{proxy[0]}:{proxy[1]}"}
             r = requests.get("https://api.ipify.org", proxies=proxies, timeout=5)
         else:
             r = requests.get("https://api.ipify.org", timeout=5)
@@ -349,10 +340,4 @@ def handle_callback(call):
 if __name__ == "__main__":
     print("🌸 Togaff VPN Bot запущен!")
     print(f"Mini App URL: {MINI_APP_URL}")
-    print(f"Бот работает с токеном: {TOKEN[:10]}...")
-    
-    # Запускаем бота
-    try:
-        bot.infinity_polling(timeout=30)
-    except Exception as e:
-        print(f"❌ Ошибка при запуске бота: {e}")
+    bot.infinity_polling(timeout=30)
