@@ -11,17 +11,8 @@ import time
 import json
 import os
 from datetime import datetime
-
-# ══════════════════════════════════════════════
-#  ВСТАВЬ СВОЙ ТОКЕН СЮДА
-TOKEN = "YOUR_BOT_TOKEN_HERE"
-# ══════════════════════════════════════════════
-
-# URL твоего Mini App (после деплоя на GitHub Pages)
-MINI_APP_URL = "https://YOUR_USERNAME.github.io/togaff-vpn/"
-
-bot = telebot.TeleBot(TOKEN)
-
+import os
+TOKEN = os.environ.get("TOKEN")
 # ── Прокси список ─────────────────────────────
 PROXIES = [
     ("185.221.160.253", 80, 60), ("185.221.160.214", 80, 60),
