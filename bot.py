@@ -18,7 +18,7 @@ TOKEN        = "8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30"
 MINI_APP_URL = "https://t.me/togaff_vpn_bot/app"
 
 # ─── Администратор (твой Telegram ID) ─────────────────
-ADMIN_IDS = {"7321093872"}   # ← сюда свой ID (узнать: @userinfobot)
+ADMIN_IDS = {7321093872}   # ← сюда свой ID (узнать: @userinfobot)
 
 # ─── Файлы для сохранения данных ──────────────────────
 USERS_FILE  = "allowed_users.json"   # whitelist
