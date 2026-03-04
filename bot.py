@@ -37,13 +37,13 @@ USERS_FILE  = "allowed_users.json"   # whitelist
 BANNED_FILE = "banned_users.json"    # чёрный список
 
 # ─── Параметры движка прокси ──────────────────────────
-TOP_FAST_COUNT  = 50    # сколько лучших держим в горячем пуле
-VERIFY_WORKERS  = 20    # потоков при параллельной проверке
-SCAN_SAMPLE     = 120   # кандидатов для /scan
-VERIFY_LIMIT    = 200   # макс попыток при /connect
+TOP_FAST_COUNT  = 30    # сколько лучших держим в горячем пуле
+VERIFY_WORKERS  = 40    # потоков при параллельной проверке
+SCAN_SAMPLE     = 200   # кандидатов для /scan
+VERIFY_LIMIT    = 300   # макс попыток при /connect
 
 # ─── Стикер на /start ─────────────────────────────────
-WELCOME_STICKER = "CAACAgIAAxkBAAIBcWZ5X2QAAf3yYW9YcgABfBiXp7CRAAJ4AQACB8ShS1kN6VrwzFjRNgQ"
+WELCOME_PHOTO = "/mnt/user-data/uploads/1772665185302_image.png"  # Астольфо
 
 try:
     import socks        # PySocks
@@ -333,30 +333,27 @@ def get_my_ip(timeout=7):
     return None
 
 def verify_proxy(ptype, host, port, my_ip,
-                 tcp_timeout=2.5, ip_timeout=9):
+                 tcp_timeout=1.5, ip_timeout=6):
     """
-    Полная верификация:
-    1) TCP пинг (быстро)
-    2) Реальный HTTP запрос через прокси → получаем новый IP
-    3) Проверяем что IP изменился (не прозрачный прокси)
-    Возвращает dict или None.
+    Двухэтапная верификация:
+    1) TCP пинг — быстро отсеиваем мёртвые
+    2) HTTP через прокси — получаем реальный новый IP
+    Таймауты короткие чтобы не висеть вечно.
     """
     ms = tcp_ping(host, port, timeout=tcp_timeout)
     if ms is None:
         return None
-
     new_ip = get_ip_via(ptype, host, port, timeout=ip_timeout)
     if not new_ip:
         return None
     if my_ip and new_ip == my_ip:
-        return None   # прозрачный прокси — пропускаем
-
+        return None   # прозрачный — пропускаем
     return {
-        "type":   ptype,
-        "host":   host,
-        "port":   port,
-        "ping":   ms,
-        "new_ip": new_ip,
+        "type":        ptype,
+        "host":        host,
+        "port":        port,
+        "ping":        ms,
+        "new_ip":      new_ip,
         "verified_at": time.time(),
     }
 
@@ -364,49 +361,94 @@ def verify_proxy(ptype, host, port, my_ip,
 #         СМАРТ-ПУЛ: авто-выбор быстрых прокси
 # ══════════════════════════════════════════════════════
 
-def _candidates_for_scan(sample):
-    """Собирает кандидатов из всех протоколов для параллельной проверки."""
+def _all_candidates(ptype_filter=None):
+    """Все кандидаты из кэша, сначала из MY_PROXIES."""
     order = (["socks5", "socks4", "http"] if SOCKS_OK
              else ["http", "socks4", "socks5"])
-    per = max(sample // len(order), 10)
-    cands = []
+    if ptype_filter:
+        order = [ptype_filter]
+    out = []
+    # Свои прокси — всегда первыми как HTTP
+    if not ptype_filter or ptype_filter == "http":
+        for h, p in MY_PROXIES_HTTP:
+            out.append(("http", h, p))
+    seen = {(x[1], x[2]) for x in out}
     for pt in order:
         pool = list(cache[pt])
         random.shuffle(pool)
-        for h, p in pool[:per]:
-            cands.append((pt, h, p))
-    random.shuffle(cands)
-    return cands
+        for h, p in pool:
+            if (h, p) not in seen:
+                seen.add((h, p))
+                out.append((pt, h, p))
+    return out
+
+def _tcp_scan_fast(candidates, workers=60, timeout=1.2):
+    """
+    Этап 1: параллельный TCP-скан.
+    Возвращает список (pt, h, p, ms) отсортированный по пингу.
+    """
+    results = []
+    lock = threading.Lock()
+
+    def check(args):
+        pt, h, p = args
+        ms = tcp_ping(h, p, timeout=timeout)
+        if ms is not None:
+            with lock:
+                results.append((ms, pt, h, p))
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        list(as_completed([ex.submit(check, c) for c in candidates]))
+
+    results.sort()   # по пингу
+    return [(pt, h, p, ms) for ms, pt, h, p in results]
 
 def build_smart_pool(my_ip=None, sample=SCAN_SAMPLE,
                      workers=VERIFY_WORKERS, status_cb=None):
     """
-    Параллельно проверяет sample прокси.
-    Обновляет cache["top_fast"] отсортированным по пингу списком.
-    status_cb(done, total) — опциональный callback прогресса.
+    Двухэтапный параллельный скан:
+    1) Быстрый TCP-скан sample кандидатов (60 потоков, 1.2с таймаут)
+    2) HTTP-верификация живых (40 потоков, 6с таймаут)
+    Гарантирует реальную смену IP.
     """
     if my_ip is None:
         my_ip = get_my_ip() or ""
 
     refresh_cache()
-    cands  = _candidates_for_scan(sample)
-    total  = len(cands)
-    done   = 0
-    lock   = threading.Lock()
+    all_cands = _all_candidates()
+    random.shuffle(all_cands)
+    cands = all_cands[:sample]
+
+    # Этап 1: TCP скан
+    if status_cb:
+        status_cb(0, sample)
+    alive = _tcp_scan_fast(cands, workers=60, timeout=1.2)
+    print(f"  TCP живых: {len(alive)}/{len(cands)}")
+
+    if not alive:
+        return []
+
+    # Этап 2: HTTP верификация только живых
+    total   = len(alive)
+    done    = 0
+    lock    = threading.Lock()
     results = []
 
-    def check(args):
+    def verify(args):
         nonlocal done
-        pt, h, p = args
-        r = verify_proxy(pt, h, p, my_ip, tcp_timeout=2.0, ip_timeout=7)
+        pt, h, p, ms = args
+        new_ip = get_ip_via(pt, h, p, timeout=6)
         with lock:
             done += 1
             if status_cb:
                 status_cb(done, total)
-        return r
+        if not new_ip or new_ip == my_ip:
+            return None
+        return {"type": pt, "host": h, "port": p,
+                "ping": ms, "new_ip": new_ip, "verified_at": time.time()}
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        for res in as_completed([ex.submit(check, c) for c in cands]):
+        for res in as_completed([ex.submit(verify, a) for a in alive]):
             r = res.result()
             if r:
                 results.append(r)
@@ -414,59 +456,109 @@ def build_smart_pool(my_ip=None, sample=SCAN_SAMPLE,
     results.sort(key=lambda x: x["ping"])
     cache["top_fast"]    = results[:TOP_FAST_COUNT]
     cache["top_updated"] = time.time()
-    print(f"✓  Смарт-пул: {len(cache['top_fast'])} прокси")
+    print(f"✓  Смарт-пул: {len(cache['top_fast'])} рабочих прокси")
     return cache["top_fast"]
 
 def smart_pool_fresh(my_ip=""):
-    """Перестраивает пул если он устарел."""
+    """Перестраивает пул если он устарел (неблокирующий)."""
     if time.time() - cache["top_updated"] > TOP_TTL:
         if not cache["scan_lock"].locked():
             def bg():
                 with cache["scan_lock"]:
-                    build_smart_pool(my_ip)
+                    build_smart_pool(my_ip, sample=SCAN_SAMPLE // 2)
             threading.Thread(target=bg, daemon=True).start()
 
 def find_best_proxy(my_ip, exclude_host=None, on_try=None,
                     ptype_filter=None):
     """
-    Главная функция поиска:
-    1) Берём из top_fast (проверенные, отсортированные по пингу)
-    2) Дополняем полным перебором если не хватает
-    Гарантирует настоящую смену IP.
+    Умный поиск рабочего прокси:
+    1) Из горячего пула top_fast — мгновенно (уже проверены)
+    2) Если пул пуст или все протухли — параллельный батч-поиск
+    Всегда гарантирует реальную смену IP.
     """
-    # ── Шаг 1: из горячего пула ──────────────────────
+    # ── Шаг 1: горячий пул ───────────────────────────
     pool = [p for p in cache["top_fast"]
             if (not exclude_host or p["host"] != exclude_host)
             and (not ptype_filter or p["type"] == ptype_filter)]
-    for px in pool:
-        # Перепроверяем (мог протухнуть)
-        r = verify_proxy(px["type"], px["host"], px["port"],
-                         my_ip, tcp_timeout=2.0, ip_timeout=8)
-        if r:
-            return r
 
-    # ── Шаг 2: полный перебор ────────────────────────
+    # Проверяем параллельно (быстро, все сразу)
+    if pool:
+        found = [None]
+        lock  = threading.Lock()
+        stop  = threading.Event()
+
+        def recheck(px):
+            if stop.is_set():
+                return
+            r = verify_proxy(px["type"], px["host"], px["port"],
+                             my_ip, tcp_timeout=1.5, ip_timeout=6)
+            if r and not stop.is_set():
+                with lock:
+                    if found[0] is None:
+                        found[0] = r
+                        stop.set()
+
+        with ThreadPoolExecutor(max_workers=min(len(pool), 20)) as ex:
+            futs = [ex.submit(recheck, px) for px in pool]
+            for f in as_completed(futs):
+                if stop.is_set():
+                    break
+
+        if found[0]:
+            return found[0]
+
+    # ── Шаг 2: батч-поиск по всей базе ───────────────
     refresh_cache()
-    order = (["socks5", "socks4", "http"] if SOCKS_OK
-             else ["http", "socks4", "socks5"])
-    if ptype_filter:
-        order = [ptype_filter]
+    all_cands = _all_candidates(ptype_filter)
+    if exclude_host:
+        all_cands = [(pt, h, p) for pt, h, p in all_cands if h != exclude_host]
 
-    n = 0
-    for pt in order:
-        raw = list(cache[pt])
-        random.shuffle(raw)
-        for host, port in raw:
-            if n >= VERIFY_LIMIT:
-                return None
-            if exclude_host and host == exclude_host:
-                continue
-            n += 1
+    # TCP скан батчами по 80
+    batch_size = 80
+    n_reported = 0
+
+    for i in range(0, min(len(all_cands), VERIFY_LIMIT * 2), batch_size):
+        batch = all_cands[i:i + batch_size]
+        alive = _tcp_scan_fast(batch, workers=60, timeout=1.2)
+
+        if not alive:
+            n_reported += len(batch)
             if on_try:
-                on_try(n, pt, host, port)
-            r = verify_proxy(pt, host, port, my_ip)
-            if r:
-                return r
+                on_try(n_reported, "...", "...", 0)
+            continue
+
+        # HTTP верификация живых из батча
+        found    = [None]
+        stop_ev  = threading.Event()
+        lock2    = threading.Lock()
+
+        def http_check(args):
+            pt, h, p, ms = args
+            if stop_ev.is_set():
+                return
+            new_ip = get_ip_via(pt, h, p, timeout=6)
+            if new_ip and new_ip != my_ip and not stop_ev.is_set():
+                with lock2:
+                    if found[0] is None:
+                        found[0] = {"type": pt, "host": h, "port": p,
+                                    "ping": ms, "new_ip": new_ip,
+                                    "verified_at": time.time()}
+                        stop_ev.set()
+
+        with ThreadPoolExecutor(max_workers=VERIFY_WORKERS) as ex:
+            futs2 = [ex.submit(http_check, a) for a in alive]
+            for f in as_completed(futs2):
+                if stop_ev.is_set():
+                    break
+
+        n_reported += len(batch)
+        if on_try:
+            on_try(n_reported, alive[0][0] if alive else "...",
+                   alive[0][1] if alive else "...", alive[0][2] if alive else 0)
+
+        if found[0]:
+            return found[0]
+
     return None
 
 # ══════════════════════════════════════════════════════
@@ -658,9 +750,10 @@ def cmd_start(msg):
 
     print(f"[START] отправляю сообщение uid={uid}")
     try:
-        bot.send_sticker(msg.chat.id, WELCOME_STICKER)
+        with open(WELCOME_PHOTO, "rb") as f:
+            bot.send_photo(msg.chat.id, f)
     except Exception as e:
-        print(f"[START] стикер: {e}")
+        print(f"[START] фото: {e}")
 
     try:
         bot.send_message(msg.chat.id, text, reply_markup=kb_main(u["connected"]))
