@@ -11,7 +11,6 @@ import time
 import json
 import os
 from datetime import datetime
-import os
 TOKEN = os.environ.get("TOKEN")
 # ── Прокси список ─────────────────────────────
 PROXIES = [
