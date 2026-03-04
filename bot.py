@@ -584,6 +584,7 @@ class FMsg:
 def cmd_start(msg):
     uid  = msg.from_user.id
     name = msg.from_user.first_name or "Гость"
+    print(f"[START] uid={uid} name={name} is_admin={is_admin(uid)} is_allowed={is_allowed(uid)}")
 
     # Регистрация в whitelist если это admin
     if is_admin(uid):
@@ -596,8 +597,10 @@ def cmd_start(msg):
                 "uses":       0,
             }
             save_users()
+            print(f"[START] admin {uid} добавлен в whitelist")
 
     if not is_allowed(uid):
+        print(f"[START] uid={uid} не в whitelist — отправляю denied")
         bot.send_message(msg.chat.id,
             "🔒  *Доступ закрыт*\n\n"
             "Этот бот работает только по приглашению.\n"
@@ -605,6 +608,7 @@ def cmd_start(msg):
             parse_mode="Markdown")
         return
 
+    print(f"[START] uid={uid} прошёл проверку — строю меню")
     # Инкрементируем счётчик использований
     key = _uid_key(uid)
     if key and key in allowed_users:
@@ -614,49 +618,59 @@ def cmd_start(msg):
     u     = get_user(uid)
     total = sum(len(cache[t]) for t in ["socks5","socks4","http"])
     fast  = len(cache["top_fast"])
-    admin_badge = "\n👑 *Администратор*" if is_admin(uid) else ""
 
     conn_line = (
-        f"🟢  *Подключён* — `{u['proxy']['host']}`  {proto_icon(u['proxy']['type'])}"
+        "🟢 Подключён — " + u["proxy"]["host"] + " (" + u["proxy"]["type"].upper() + ")"
         if u["connected"] and u["proxy"]
-        else "🔴  *Не подключён*"
+        else "🔴 Не подключён"
     )
+    admin_line = "\n👑 Администратор" if is_admin(uid) else ""
 
-    text = (
-        f"👋  *Привет, {name}!*{admin_badge}\n\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🛡  *Togaff VPN*  ·  Ultimate\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"{conn_line}\n\n"
-        f"📦  Прокси в базе:    `{total}`\n"
-        f"⚡  Лучших в пуле:   `{fast}`\n"
-        f"🔒  Протоколы:  SOCKS5 · SOCKS4 · HTTP\n"
-        f"✅  Верификация:  реальная смена IP\n\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📋  *Команды*\n"
-        f"`/connect`      — авто-подключение\n"
-        f"`/connect s5`   — только SOCKS5\n"
-        f"`/connect s4`   — только SOCKS4\n"
-        f"`/connect http` — только HTTP\n"
-        f"`/disconnect`   — отключиться\n"
-        f"`/rotate`       — сменить IP\n"
-        f"`/scan`         — найти быстрые серверы\n"
-        f"`/status`       — текущий статус\n"
-        f"`/ip`           — мой IP\n"
-        f"`/generate`     — конфиг прокси\n"
-        f"`/proxies`      — список серверов\n"
-        f"`/refresh`      — обновить базу\n"
-        + (f"`/admin`        — панель администратора\n" if is_admin(uid) else "")
-    )
+    lines = [
+        f"👋 Привет, {name}!{admin_line}",
+        "",
+        "🛡 Togaff VPN · Ultimate",
+        "─────────────────────",
+        conn_line,
+        "",
+        f"📦 Прокси в базе:  {total}",
+        f"⚡ Лучших в пуле:  {fast}",
+        "🔒 SOCKS5 · SOCKS4 · HTTP",
+        "",
+        "─────────────────────",
+        "Команды:",
+        "/connect — авто-подключение",
+        "/connect s5 — SOCKS5",
+        "/connect s4 — SOCKS4",
+        "/connect http — HTTP",
+        "/disconnect — отключиться",
+        "/rotate — сменить IP",
+        "/scan — найти быстрые серверы",
+        "/status — текущий статус",
+        "/ip — мой IP",
+        "/generate — конфиг прокси",
+        "/proxies — список серверов",
+        "/refresh — обновить базу",
+    ]
+    if is_admin(uid):
+        lines.append("/admin — панель администратора")
+    text = "\n".join(lines)
 
+    print(f"[START] отправляю сообщение uid={uid}")
     try:
         bot.send_sticker(msg.chat.id, WELCOME_STICKER)
-    except:
-        pass
+    except Exception as e:
+        print(f"[START] стикер: {e}")
 
-    bot.send_message(msg.chat.id, text,
-                     parse_mode="Markdown",
-                     reply_markup=kb_main(u["connected"]))
+    try:
+        bot.send_message(msg.chat.id, text, reply_markup=kb_main(u["connected"]))
+        print(f"[START] успешно отправлено uid={uid}")
+    except Exception as e:
+        print(f"[START] ОШИБКА: {e}")
+        try:
+            bot.send_message(msg.chat.id, text)
+        except Exception as e2:
+            print(f"[START] КРИТИЧНО: {e2}")
 
 # ══════════════════════════════════════════════════════
 #               ПАНЕЛЬ АДМИНИСТРАТОРА
