@@ -575,14 +575,6 @@ def cmd_start(msg):
             }
             save_users()
 
-    if not is_allowed(uid):
-        bot.send_message(msg.chat.id,
-            "🔒  *Доступ закрыт*\n\n"
-            "Этот бот работает только по приглашению.\n"
-            "Напиши администратору и попроси добавить тебя.",
-            )
-        return
-
     # Инкрементируем счётчик использований
     key = _uid_key(uid)
     if key and key in allowed_users:
