@@ -564,9 +564,9 @@ def cmd_start(msg):
     name = msg.from_user.first_name or "Гость"
 
     # Регистрация в whitelist если это admin
-    if is_admin(uid): 7321093872
+    if is_admin(uid):
         key = str(uid)
-        if key not in allowed_users: 7321093872
+        if key not in allowed_users:
             allowed_users[key] = {
                 "username":   getattr(msg.from_user, "username", ""),
                 "first_name": name,
@@ -580,7 +580,7 @@ def cmd_start(msg):
             "🔒  *Доступ закрыт*\n\n"
             "Этот бот работает только по приглашению.\n"
             "Напиши администратору и попроси добавить тебя.",
-            parse_mode="Markdown")
+            )
         return
 
     # Инкрементируем счётчик использований
