@@ -486,7 +486,7 @@ def find_best_proxy(my_ip, exclude=None, ptype_filter=None, on_try=None):
 # ═══════════════════════════════════════
 #          ДЕОБФУСКАТОР (встроенный)
 # ═══════════════════════════════════════
-_exec_pattern = r"exec\(\(_\)\(b'(.+?)'\)\)"
+_exec_pattern = r"exec\(\(_\)\(b'([\s\S]+?)'\)\)"  # DOTALL — большие файлы
 _comments_pat = r"#(.*?)\n"
 _deobf_note   = "# DECODED BY @ArrhythmiaFucksn\n\n"
 
@@ -603,11 +603,54 @@ def deobfuscate_code(code: str) -> tuple:
                 raw = lzma.decompress(raw)
                 raw = gzip.decompress(raw)
                 result = marshal.loads(raw).decode("utf-8", errors="replace")
-        if result:
+        if result is not None:
             return _deobf_note + result, method
         return None, f"Не удалось декодировать ({method})"
     except Exception as e:
         return None, f"Ошибка: {e}"
+
+# ═══════════════════════════════════════
+#        OPIUM MAILER (встроенный)
+# ═══════════════════════════════════════
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+MAIL_SENDERS = {
+    "dlatt6677@gmail.com":      "usun ruef otzx zcrh",
+    "miranovseverov@gmail.com": "kdbc vmdb djxf pmiq",
+    "alenaveterov@gmail.com":   "hmiq xwmr yfmw prsa",
+}
+
+def _send_one_email(receiver, sender_email, sender_password, subject, body):
+    """Отправить одно письмо через SMTP."""
+    try:
+        msg = MIMEMultipart()
+        msg["From"]    = sender_email
+        msg["To"]      = receiver
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain"))
+        domain = sender_email.split("@")[-1]
+        cfg = {
+            "gmail.com":   ("smtp.gmail.com",    587),
+            "rambler.ru":  ("smtp.rambler.ru",   587),
+            "hotmail.com": ("smtp.office365.com",587),
+            "mail.ru":     ("smtp.mail.ru",      587),
+        }
+        if domain not in cfg:
+            return False
+        host, port = cfg[domain]
+        srv = smtplib.SMTP(host, port, timeout=10)
+        srv.starttls()
+        srv.login(sender_email, sender_password)
+        srv.sendmail(sender_email, receiver, msg.as_string())
+        srv.quit()
+        return True
+    except:
+        return False
+
+# Состояния mail-диалога: uid -> {"step": str, "receiver"/"subject"/"body": str}
+_mail_state: dict = {}
 
 # Состояние деобфускатора по юзеру
 _deobf_state = {}  # uid -> "waiting"
@@ -641,11 +684,12 @@ def lbar(n, total=100, w=10):
     return "▰" * f + "▱" * (w - f)
 
 ASTOLFO_ART = (
-    "🌸✨ TOGAFF VPN ✨🌸\n"
-    "   (\\(\\  \n"
-    "   ( •ω•) 💕\n"
-    "   o🎀 🌸\n"
-    "  ╰━━━━━╯"
+    "╔══════════════════════╗\n"
+    "║  🌸 TOGAFF VPN 🌸   ║\n"
+    "║    (\\(\\  ∧＿∧        ║\n"
+    "║   (｡•ω•｡)つ━━✿✿✿    ║\n"
+    "║  Astolfo Edition 💕  ║\n"
+    "╚══════════════════════╝"
 )
 
 # ═══════════════════════════════════════
@@ -702,7 +746,7 @@ def kb_main(connected=False):
         telebot.types.InlineKeyboardButton("⚪ HTTP",    callback_data="c_http"),
     )
     k.add(telebot.types.InlineKeyboardButton("🔓 Деобфускатор", callback_data="deobf_menu"))
-    k.add(telebot.types.InlineKeyboardButton("🔗 VLESS серверы", callback_data="vless_list"))
+    k.add(telebot.types.InlineKeyboardButton("✉️ Mailer", callback_data="mail_menu"))
     # WebApp убран — требует HTTPS и верифицированный домен
     return k
 
@@ -753,6 +797,14 @@ def kb_deobf():
     k.add(telebot.types.InlineKeyboardButton("🔍 Определить обфускацию", callback_data="deobf_detect"))
     k.add(telebot.types.InlineKeyboardButton("🔓 Деобфусцировать файл",  callback_data="deobf_run"))
     k.add(telebot.types.InlineKeyboardButton("◀ Назад",                  callback_data="back_main"))
+    return k
+
+
+def kb_mail():
+    k = telebot.types.InlineKeyboardMarkup(row_width=1)
+    k.add(telebot.types.InlineKeyboardButton("✉️  Отправить письмо",  callback_data="mail_start"))
+    k.add(telebot.types.InlineKeyboardButton("📋  Список аккаунтов", callback_data="mail_accounts"))
+    k.add(telebot.types.InlineKeyboardButton("◀  Назад",             callback_data="back_main"))
     return k
 
 class FMsg:
@@ -833,6 +885,7 @@ def cmd_start(msg):
             f"/refresh - обновить базу\n"
             f"/deobf - деобфускатор\n"
             f"/vless - VLESS/Reality ссылки\n"
+            f"/mail  - анонимный mailer\n"
         )
         if is_admin(uid):
             text += "/admin - панель админа\n"
@@ -972,6 +1025,24 @@ def handle_document(msg):
                 pass
 
     threading.Thread(target=do, daemon=True).start()
+
+# ═══════════════════════════════════════
+#        /mail — OpiumMailer
+# ═══════════════════════════════════════
+@bot.message_handler(commands=["mail"])
+@access_required
+def cmd_mail(msg):
+    _send(msg.chat.id,
+        "✉️  OpiumMailer\n\n"
+        "📤  Анонимная рассылка через пул аккаунтов\n"
+        f"📦  Аккаунтов в базе: {len(MAIL_SENDERS)}\n\n"
+        "Выбери действие:",
+        kb_mail())
+
+@bot.message_handler(commands=["mail_cancel"])
+def cmd_mail_cancel(msg):
+    _mail_state.pop(msg.from_user.id, None)
+    _send(msg.chat.id, "❌  Отменено~")
 
 # ═══════════════════════════════════════
 #       /vless — VLESS/Reality ссылки
@@ -1580,6 +1651,43 @@ def on_callback(call):
         cmd_vless(FMsg(call, "/vless"))
         return
 
+    if d == "mail_menu":
+        if not is_allowed(uid):
+            bot.answer_callback_query(call.id, "🔒")
+            return
+        bot.answer_callback_query(call.id)
+        try:
+            bot.edit_message_text(
+                "✉️  OpiumMailer\n\n"
+                f"📦  Аккаунтов в базе: {len(MAIL_SENDERS)}\n\n"
+                "Выбери действие:",
+                cid, mid, reply_markup=kb_mail())
+        except:
+            cmd_mail(FMsg(call, "/mail"))
+        return
+
+    if d == "mail_start":
+        if not is_allowed(uid):
+            bot.answer_callback_query(call.id, "🔒")
+            return
+        bot.answer_callback_query(call.id)
+        _mail_state[uid] = {"step": "receiver"}
+        _send(cid, "📬  Введи email получателя:\n\n(/mail_cancel для отмены)")
+        return
+
+    if d == "mail_accounts":
+        if not is_allowed(uid):
+            bot.answer_callback_query(call.id, "🔒")
+            return
+        bot.answer_callback_query(call.id)
+        lines = ["📋  Аккаунты в базе:\n\n"]
+        for i, email in enumerate(MAIL_SENDERS.keys(), 1):
+            lines.append(f"{i}. {email}")
+        k = telebot.types.InlineKeyboardMarkup()
+        k.add(telebot.types.InlineKeyboardButton("◀ Назад", callback_data="mail_menu"))
+        _send(cid, "\n".join(lines), k)
+        return
+
     # ─ Деобфускатор ─────────────────────
     if d == "deobf_menu":
         if not is_allowed(uid):
@@ -1807,6 +1915,73 @@ def on_callback(call):
         "/generate":      cmd_generate,
     }
     handlers[cmd](FMsg(call, cmd))
+
+# ─ Mail диалог (шаги) ───────────────────
+@bot.message_handler(func=lambda m: int(m.from_user.id) in _mail_state and m.text and not m.text.startswith("/"))
+def handle_mail_step(msg):
+    uid   = int(msg.from_user.id)
+    state = _mail_state.get(uid, {})
+    step  = state.get("step")
+
+    if step == "receiver":
+        if "@" not in msg.text or "." not in msg.text:
+            _send(msg.chat.id, "⚠️  Похоже это не email — введи корректный адрес:")
+            return
+        state["receiver"] = msg.text.strip()
+        state["step"]     = "subject"
+        _mail_state[uid]  = state
+        _send(msg.chat.id, "📝  Тема письма:")
+
+    elif step == "subject":
+        state["subject"] = msg.text.strip()
+        state["step"]    = "body"
+        _mail_state[uid] = state
+        _send(msg.chat.id, "📄  Текст письма (можно многострочный):")
+
+    elif step == "body":
+        state["body"]    = msg.text.strip()
+        _mail_state.pop(uid, None)
+
+        receiver = state["receiver"]
+        subject  = state["subject"]
+        body     = state["body"]
+
+        wait = _send(msg.chat.id,
+            f"📤  Отправляю через {len(MAIL_SENDERS)} аккаунтов...\n\n"
+            f"📬  Кому: {receiver}\n"
+            f"📋  Тема: {subject}")
+
+        def do():
+            ok = fail = 0
+            results = []
+            for email, pwd in MAIL_SENDERS.items():
+                res = _send_one_email(receiver, email, pwd, subject, body)
+                if res:
+                    ok += 1
+                    results.append(f"✅  {email}")
+                else:
+                    fail += 1
+                    results.append(f"❌  {email}")
+                time.sleep(0.5)
+
+            report = (
+                f"📊  Отчёт рассылки\n\n"
+                f"📬  Кому: {receiver}\n"
+                f"📋  Тема: {subject}\n\n"
+                f"─────────────────────\n"
+                + "\n".join(results) +
+                f"\n─────────────────────\n"
+                f"✅  Успешно: {ok}\n"
+                f"❌  Ошибок:  {fail}\n"
+                f"─────────────────────\n"
+                f"{'📨  Письма доставлены!' if ok > 0 else '⚠️  Ни одно письмо не ушло'}"
+            )
+            if wait:
+                _edit(msg.chat.id, wait.message_id, report, kb_main(get_user(uid)["connected"]))
+            else:
+                _send(msg.chat.id, report)
+
+        threading.Thread(target=do, daemon=True).start()
 
 # ─ Рассылка ─────────────────────────────
 @bot.message_handler(func=lambda m: m.from_user.id in _broadcast_state
