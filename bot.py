@@ -118,6 +118,25 @@ MY_PROXIES_HTTP = [
     ("31.7.38.227", 80),
 ]
 
+# VLESS/Reality ссылки — отдаются пользователю через /vless
+MY_VLESS_PROXIES = [
+    "vless://02f62dd5-218f-4e9f-9c4b-f8a2e452533e@78.159.247.79:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.vk.com&fp=chrome&pbk=HxjD-7OeJUtrNFsW4PEqThSs6fujV9Mkl5Z4igx21k8&sid=ef&type=tcp#RU-GCN",
+    "vless://02fb468f-21f2-460e-bfa1-ef52ae5e627f@95.163.182.172:443?encryption=none&flow=xtls-rprx-vision&fp=chrome&pbk=5bGFIWSo4vlrd9Tv1yFcpdpSjrjYYN20SOWHYfighHc&security=reality&sid=aad92345&sni=api-maps.yandex.ru&type=tcp#SE-CIDR",
+    "vless://0339f151-d187-4d5e-b0eb-994cebf3f9ca@185.130.112.165:8448?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&fp=random&sni=eh.vk.com&pbk=Ox4BT0R5103EpplP2y6TIVv0VC-xBR2-YT6EJ4YmkUw&spx=/#RU-9452",
+    "vless://0eb0019b66404203a7e07701f61bf766@91.220.8.177:443?type=tcp&encryption=none&flow=xtls-rprx-vision&sni=m.vk.com&fp=chrome&security=reality&pbk=n0e-y_JNPYLzhJkFuhlq6-k1lgUG43cmiQXkP2Pv_wc&sid=aabbccdd#DE-Reality",
+    "vless://0ec58af7-0098-430e-8efd-551322a7bb5d@5.188.143.238:50445?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&fp=chrome&sni=celular.vk.com&pbk=ZSzB9TQPGNcCiC0WLmciF5Jc8doJDvdRgbqTi8SCoEM&sid=a1b2c3d4e5f6789a#RU-409",
+    "vless://0a9fe7e0-e02d-42ca-bebd-ecb4292f180c@146.185.240.23:443?security=reality&encryption=none&pbk=zii4nGNapnFKL6SN8GzWNqFlElBvUCUFUThEP0kFH04&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=m.vk.ru&sid=c6ef72e4635d15a5#RU-383",
+    "vless://11f81498-983c-401c-9e6c-b458999d498f@84.201.172.12:9443?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&fp=chrome&sni=www.vk.com&pbk=59iHd67rGlyJBUpDq5NXC91EB0U4AXtSlOjAQsW2D14#RU-9386",
+    "vless://12a57f4b-813d-4e0f-b15f-2234c71fd41d@158.160.189.247:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=m.vk.com&fp=chrome&pbk=Qddpg8luihgzgx4g4uMJklXzlrMCd8L1igJSWrRUvSc&sid=887c0d72e771a934&type=tcp#PL-166",
+    "vless://07cd9dbe-21ac-4871-817d-c772687e4b7c@103.27.157.79:2053?encryption=none&flow=xtls-rprx-vision&fp=chrome&pbk=WckOSneVajAzpH0sZSAFAWPnmwuuEXKZrTICNj5_hHU&security=reality&sid=423bccc9c13fb509&sni=www.ibm.com&type=tcp#DE-Reality2",
+    "vless://05732283-b4ee-4a86-920c-df9cf83d16c4@51.250.4.154:8443?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&fp=chrome&sni=m.vk.com&pbk=4mshoogy3ikozr2hra8vckfts7ufmfey2txpnd4jfzm&sid=adcdd261d4e5aea1#RU-Reality2",
+    "vless://0c62469a-009f-4050-bbc6-2be5d74e64f7@212.111.84.218:443?security=reality&encryption=none&pbk=x6cB3avjxjxzhNESk8iJTTCzOPKXnB0AbnjKSqKkang&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=maps.yandex.ru&sid=8f0a12bc34de5678#KZ-Reality",
+    "vless://0ff8dbfb-d7ee-4a19-b22d-b652a8b52e22@212.111.84.82:443?security=reality&encryption=none&pbk=7zd9mJilgjOrg_ohtw23Vmio-pdnYqeP_r-kiWt87Cg&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=m.vk.ru&sid=f4b4a6365558ea2e#RU-421",
+    "vless://0f6c83bc-34ba-4ca1-96e6-08b3620cbce5@145.223.69.171:443?encryption=none&security=reality&sni=www.vk.com&fp=firefox&pbk=JQHrZXZRnkZUOMdNHS7X1fPyMDqKjiQWlfTdntIOqzg&sid=a6b92e23&type=tcp#FR-VK",
+    "vless://0f6c83bc-34ba-4ca1-96e6-08b3620cbce5@217.16.19.114:443?encryption=none&security=reality&sni=www.vk.com&fp=chrome&pbk=s0qb5ggFZN3X7QXWtgK4o7UgfS9DlpFC6JT6OWVs6X4&sid=a5d90165&type=tcp#RU-VK-1",
+    "vless://126e5a65-e81a-46ce-bd61-605f32f1352e@91.217.10.166:9443?flow=xtls-rprx-vision&security=reality&sni=api.avito.ru&pbk=WvNaAxI0W__qfUKbtysH4IwF155YENlv3PG6crCmPkA&type=tcp#KZ-3",
+]
+
 # ═══════════════════════════════════════
 #          ИСТОЧНИКИ ПРОКСИ
 # ═══════════════════════════════════════
@@ -432,10 +451,11 @@ def find_best_proxy(my_ip, exclude=None, ptype_filter=None, on_try=None):
         alive = _tcp_scan(chunk, workers=60, timeout=1.2)
         n += len(chunk)
         if on_try:
+            # alive items are (pt, h, p, ms)
             on_try(n,
-                   alive[0][0] if alive else "...",
+                   alive[0][0] if alive else "http",
                    alive[0][1] if alive else "...",
-                   alive[0][2] if alive else 0)
+                   alive[0][3] if alive else 0)
         if not alive:
             continue
 
@@ -649,7 +669,7 @@ def _updater(chat_id, msg_id):
 
     def upd(text, kb=None, force=False):
         now = time.time()
-        if not force and now - last[0] < 1.6:
+        if not force and now - last[0] < 2.0:
             return
         last[0] = now
         _edit(chat_id, msg_id, text, kb)
@@ -682,6 +702,7 @@ def kb_main(connected=False):
         telebot.types.InlineKeyboardButton("⚪ HTTP",    callback_data="c_http"),
     )
     k.add(telebot.types.InlineKeyboardButton("🔓 Деобфускатор", callback_data="deobf_menu"))
+    k.add(telebot.types.InlineKeyboardButton("🔗 VLESS серверы", callback_data="vless_list"))
     # WebApp убран — требует HTTPS и верифицированный домен
     return k
 
@@ -811,6 +832,7 @@ def cmd_start(msg):
             f"/proxies - список серверов\n"
             f"/refresh - обновить базу\n"
             f"/deobf - деобфускатор\n"
+            f"/vless - VLESS/Reality ссылки\n"
         )
         if is_admin(uid):
             text += "/admin - панель админа\n"
@@ -866,24 +888,28 @@ def cmd_deobf_send(msg):
 #   Обработка документов (.py файлов)
 # ═══════════════════════════════════════
 @bot.message_handler(content_types=["document"])
-@access_required
 def handle_document(msg):
-    uid = msg.from_user.id
+    uid = int(msg.from_user.id)
 
-    # Если не в режиме деобфускатора — просто игнор
-    if _deobf_state.get(uid) != "waiting":
-        _send(msg.chat.id, "💕 Для деобфускации напиши /deobf")
+    # Проверка доступа вручную (декоратор ломается на документах)
+    if not is_allowed(uid):
+        bot.send_message(msg.chat.id, "Доступ закрыт~")
+        return
+
+    state = _deobf_state.get(uid)
+
+    # Если не в режиме деобфускатора — игнор
+    if state not in ("waiting", "waiting_detect"):
+        bot.send_message(msg.chat.id, "Чтобы деобфусцировать файл — нажми кнопку Деобфускатор или /deobf")
         return
 
     doc = msg.document
     if not doc.file_name.endswith(".py"):
-        _send(msg.chat.id, "⚠️ Только .py файлы поддерживаются!")
+        bot.send_message(msg.chat.id, "Только .py файлы!")
         return
 
     _deobf_state.pop(uid, None)
-    wait = _send(msg.chat.id, "🔍 Анализирую файл...")
-    if not wait:
-        return
+    wait = bot.send_message(msg.chat.id, "Анализирую файл...")
 
     def do():
         try:
@@ -892,44 +918,84 @@ def handle_document(msg):
             code = downloaded.decode("utf-8", errors="replace")
 
             method = detect_obfuscation(code)
-            if not method:
-                _edit(msg.chat.id, wait.message_id,
-                    "🌸 Анализ завершён\n\n"
-                    "❓ Известная обфускация не обнаружена\n\n"
-                    "Файл может быть чистым или использует нестандартный метод.")
+
+            # Режим только определения
+            if state == "waiting_detect":
+                if method:
+                    bot.edit_message_text(
+                        f"Найдена обфускация: {method}\n\n"
+                        f"Используй /deobf -> Деобфусцировать файл для расшифровки",
+                        msg.chat.id, wait.message_id)
+                else:
+                    bot.edit_message_text(
+                        "Обфускация не обнаружена\n\nФайл чистый или метод неизвестен",
+                        msg.chat.id, wait.message_id)
                 return
 
-            _edit(msg.chat.id, wait.message_id,
-                f"🔍 Обнаружена обфускация: {method}\n\n"
-                f"⏳ Декодирую...")
+            # Полная деобфускация
+            if not method:
+                bot.edit_message_text(
+                    "Обфускация не обнаружена\n\nФайл уже чистый или метод неизвестен",
+                    msg.chat.id, wait.message_id)
+                return
+
+            bot.edit_message_text(
+                f"Обнаружена: {method}\nДекодирую...",
+                msg.chat.id, wait.message_id)
 
             result, info = deobfuscate_code(code)
 
             if result:
-                # Сохраняем и отправляем файл
                 out_name = f"decoded_{doc.file_name}"
                 out_path = f"/tmp/{out_name}"
                 with open(out_path, "w", encoding="utf-8") as f:
                     f.write(result)
-
-                _edit(msg.chat.id, wait.message_id,
-                    f"✅ Деобфускация успешна!\n\n"
-                    f"🔓 Метод: {info}\n"
-                    f"📄 Файл: {out_name}\n\n"
-                    f"Отправляю результат...")
-
+                bot.edit_message_text(
+                    f"Готово! Метод: {info}",
+                    msg.chat.id, wait.message_id)
                 with open(out_path, "rb") as f:
                     bot.send_document(msg.chat.id, f, visible_file_name=out_name,
-                        caption=f"🌸 Decoded by Togaff VPN Deobfuscator\nМетод: {info}")
-                os.remove(out_path)
+                        caption=f"Decoded | Метод: {info}")
+                try:
+                    os.remove(out_path)
+                except:
+                    pass
             else:
-                _edit(msg.chat.id, wait.message_id,
-                    f"❌ Не удалось деобфусцировать\n\n{info}")
+                bot.edit_message_text(f"Не удалось: {info}", msg.chat.id, wait.message_id)
 
         except Exception as e:
-            _edit(msg.chat.id, wait.message_id, f"❌ Ошибка: {e}")
+            import traceback
+            print(f"[deobf] ERR: {traceback.format_exc()}")
+            try:
+                bot.edit_message_text(f"Ошибка: {e}", msg.chat.id, wait.message_id)
+            except:
+                pass
 
     threading.Thread(target=do, daemon=True).start()
+
+# ═══════════════════════════════════════
+#       /vless — VLESS/Reality ссылки
+# ═══════════════════════════════════════
+@bot.message_handler(commands=["vless"])
+@access_required
+def cmd_vless(msg):
+    if not MY_VLESS_PROXIES:
+        _send(msg.chat.id, "Нет VLESS серверов~")
+        return
+    # Отправляем по 5 штук чтобы не превысить лимит сообщения
+    chunk_size = 5
+    total = len(MY_VLESS_PROXIES)
+    header = (
+        f"VLESS / XTLS-Reality серверы ({total} шт)\n\n"
+        f"Вставляй в v2rayNG / Hiddify / Nekoray / Streisand\n"
+        f"─────────────────────\n\n"
+    )
+    first = True
+    for i in range(0, total, chunk_size):
+        chunk = MY_VLESS_PROXIES[i:i+chunk_size]
+        text = (header if first else "") + "\n".join(chunk)
+        first = False
+        bot.send_message(msg.chat.id, text)
 
 # ═══════════════════════════════════════
 #         /pick — ручной выбор прокси
@@ -1505,6 +1571,14 @@ def on_callback(call):
     d   = call.data
     cid = call.message.chat.id
     mid = call.message.message_id
+
+    if d == "vless_list":
+        if not is_allowed(uid):
+            bot.answer_callback_query(call.id, "Нет доступа")
+            return
+        bot.answer_callback_query(call.id)
+        cmd_vless(FMsg(call, "/vless"))
+        return
 
     # ─ Деобфускатор ─────────────────────
     if d == "deobf_menu":
