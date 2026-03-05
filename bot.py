@@ -622,8 +622,9 @@ MAIL_SENDERS = {
     "alenaveterov@gmail.com":   "hmiq xwmr yfmw prsa",
 }
 
-def _send_one_email(receiver, sender_email, sender_password, subject, body):
-    """Отправить одно письмо через SMTP."""
+def _send_one_email(receiver, sender_email, sender_password, subject, body, proxy=None):
+    """Отправить одно письмо через SMTP, опционально через прокси."""
+    import socks as _socks_mod
     try:
         msg = MIMEMultipart()
         msg["From"]    = sender_email
@@ -638,16 +639,54 @@ def _send_one_email(receiver, sender_email, sender_password, subject, body):
             "mail.ru":     ("smtp.mail.ru",      587),
         }
         if domain not in cfg:
-            return False
+            return False, "неизвестный домен"
         host, port = cfg[domain]
-        srv = smtplib.SMTP(host, port, timeout=10)
-        srv.starttls()
-        srv.login(sender_email, sender_password)
-        srv.sendmail(sender_email, receiver, msg.as_string())
-        srv.quit()
-        return True
-    except:
-        return False
+
+        # Подключаемся через прокси если есть
+        if proxy and SOCKS_OK:
+            ptype = proxy.get("type", "http")
+            ph    = proxy["host"]
+            pp    = proxy["port"]
+            if ptype == "socks5":
+                pcode = _socks_mod.SOCKS5
+            elif ptype == "socks4":
+                pcode = _socks_mod.SOCKS4
+            else:
+                pcode = _socks_mod.HTTP
+            sock = _socks_mod.socksocket()
+            sock.set_proxy(pcode, ph, pp)
+            sock.settimeout(15)
+            sock.connect((host, port))
+            import ssl
+            srv = smtplib.SMTP.__new__(smtplib.SMTP)
+            srv._host = host
+            srv.timeout = 15
+            srv.sock = sock
+            srv.file = None
+            srv._tls_required = False
+            srv.local_hostname = "localhost"
+            srv.esmtp_features = {}
+            srv.default_port = port
+            import io
+            srv.file = sock.makefile("rb")
+            code_r, msg_r = srv.getreply()
+            if code_r != 220:
+                return False, f"SMTP {code_r}"
+            srv.ehlo_or_helo_if_needed()
+            srv.starttls()
+            srv.ehlo()
+            srv.login(sender_email, sender_password)
+            srv.sendmail(sender_email, receiver, msg.as_string())
+            srv.quit()
+        else:
+            srv = smtplib.SMTP(host, port, timeout=12)
+            srv.starttls()
+            srv.login(sender_email, sender_password)
+            srv.sendmail(sender_email, receiver, msg.as_string())
+            srv.quit()
+        return True, "OK"
+    except Exception as e:
+        return False, str(e)[:60]
 
 # Состояния mail-диалога: uid -> {"step": str, "receiver"/"subject"/"body": str}
 _mail_state: dict = {}
@@ -800,10 +839,14 @@ def kb_deobf():
     return k
 
 
-def kb_mail():
+def kb_mail(connected=False):
     k = telebot.types.InlineKeyboardMarkup(row_width=1)
     k.add(telebot.types.InlineKeyboardButton("✉️  Отправить письмо",  callback_data="mail_start"))
-    k.add(telebot.types.InlineKeyboardButton("📋  Список аккаунтов", callback_data="mail_accounts"))
+    k.add(telebot.types.InlineKeyboardButton("📋  Аккаунты",          callback_data="mail_accounts"))
+    if not connected:
+        k.add(telebot.types.InlineKeyboardButton("🔒  Подключить прокси", callback_data="connect"))
+    else:
+        k.add(telebot.types.InlineKeyboardButton("🔄  Сменить прокси",    callback_data="rotate"))
     k.add(telebot.types.InlineKeyboardButton("◀  Назад",             callback_data="back_main"))
     return k
 
@@ -1656,14 +1699,20 @@ def on_callback(call):
             bot.answer_callback_query(call.id, "🔒")
             return
         bot.answer_callback_query(call.id)
-        try:
-            bot.edit_message_text(
-                "✉️  OpiumMailer\n\n"
-                f"📦  Аккаунтов в базе: {len(MAIL_SENDERS)}\n\n"
-                "Выбери действие:",
-                cid, mid, reply_markup=kb_mail())
-        except:
-            cmd_mail(FMsg(call, "/mail"))
+        _mail_state.pop(uid, None)  # сбрасываем незаконченный диалог
+        u_loc = get_user(uid)
+        px = u_loc.get("proxy") if u_loc.get("connected") else (cache["top_fast"][0] if cache["top_fast"] else None)
+        px_txt = f"🔒  Прокси: {px['host']}:{px['port']} ({px['type'].upper()})" if px else "⚠️  Прокси не выбран — письмо уйдёт напрямую"
+        text = (
+            f"✉️  OpiumMailer\n"
+            f"──────────────────────\n"
+            f"📦  Аккаунтов: {len(MAIL_SENDERS)}\n"
+            f"{px_txt}\n"
+            f"──────────────────────\n"
+            f"Выбери действие:"
+        )
+        try: bot.edit_message_text(text, cid, mid, reply_markup=kb_mail(u_loc.get('connected', False)))
+        except: _send(cid, text, kb_mail(u_loc.get('connected', False)))
         return
 
     if d == "mail_start":
@@ -1671,8 +1720,17 @@ def on_callback(call):
             bot.answer_callback_query(call.id, "🔒")
             return
         bot.answer_callback_query(call.id)
-        _mail_state[uid] = {"step": "receiver"}
-        _send(cid, "📬  Введи email получателя:\n\n(/mail_cancel для отмены)")
+        k = telebot.types.InlineKeyboardMarkup()
+        k.add(telebot.types.InlineKeyboardButton("❌ Отмена", callback_data="mail_cancel"))
+        try:
+            bot.edit_message_text(
+                "✉️  Mailer — шаг 1/3\n\n"
+                "📬  Введи email получателя:",
+                cid, mid, reply_markup=k)
+            _mail_state[uid] = {"step": "receiver", "msg_id": mid}
+        except:
+            m2 = _send(cid, "✉️  Mailer — шаг 1/3\n\n📬  Введи email получателя:", k)
+            _mail_state[uid] = {"step": "receiver", "msg_id": m2.message_id if m2 else None}
         return
 
     if d == "mail_accounts":
@@ -1680,12 +1738,30 @@ def on_callback(call):
             bot.answer_callback_query(call.id, "🔒")
             return
         bot.answer_callback_query(call.id)
-        lines = ["📋  Аккаунты в базе:\n\n"]
+        lines = ["📋  Аккаунты в базе\n──────────────────────\n"]
         for i, email in enumerate(MAIL_SENDERS.keys(), 1):
-            lines.append(f"{i}. {email}")
-        k = telebot.types.InlineKeyboardMarkup()
-        k.add(telebot.types.InlineKeyboardButton("◀ Назад", callback_data="mail_menu"))
-        _send(cid, "\n".join(lines), k)
+            lines.append(f"  {i}.  {email}")
+        lines.append(f"\n──────────────────────")
+        lines.append(f"Всего: {len(MAIL_SENDERS)}")
+        k = telebot.types.InlineKeyboardMarkup(row_width=1)
+        k.add(
+            telebot.types.InlineKeyboardButton("✉️  Отправить письмо", callback_data="mail_start"),
+            telebot.types.InlineKeyboardButton("◀  Назад", callback_data="mail_menu"),
+        )
+        try: bot.edit_message_text("\n".join(lines), cid, mid, reply_markup=k)
+        except: _send(cid, "\n".join(lines), k)
+        return
+
+    if d == "mail_cancel":
+        _mail_state.pop(uid, None)
+        bot.answer_callback_query(call.id, "Отменено")
+        k = telebot.types.InlineKeyboardMarkup(row_width=1)
+        k.add(
+            telebot.types.InlineKeyboardButton("✉️  Отправить письмо", callback_data="mail_start"),
+            telebot.types.InlineKeyboardButton("◀  Назад", callback_data="back_main"),
+        )
+        try: bot.edit_message_text("✉️  Mailer\n\n❌  Отменено~", cid, mid, reply_markup=k)
+        except: _send(cid, "Отменено~")
         return
 
     # ─ Деобфускатор ─────────────────────
@@ -1922,64 +1998,123 @@ def handle_mail_step(msg):
     uid   = int(msg.from_user.id)
     state = _mail_state.get(uid, {})
     step  = state.get("step")
+    cid   = msg.chat.id
+
+    # Удаляем сообщение пользователя для чистого UI
+    try: bot.delete_message(cid, msg.message_id)
+    except: pass
+
+    mid = state.get("msg_id")  # ID основного сообщения-панели
+
+    def upd(text, kb=None):
+        if mid:
+            try: bot.edit_message_text(text, cid, mid, reply_markup=kb); return
+            except: pass
+        m2 = _send(cid, text, kb)
+        if m2: state["msg_id"] = m2.message_id; _mail_state[uid] = state
 
     if step == "receiver":
-        if "@" not in msg.text or "." not in msg.text:
-            _send(msg.chat.id, "⚠️  Похоже это не email — введи корректный адрес:")
+        t = msg.text.strip()
+        if "@" not in t or "." not in t:
+            k = telebot.types.InlineKeyboardMarkup()
+            k.add(telebot.types.InlineKeyboardButton("❌ Отмена", callback_data="mail_cancel"))
+            upd("✉️  Mailer — шаг 1/3\n\n⚠️  Это не похоже на email\nВведи корректный адрес:", k)
             return
-        state["receiver"] = msg.text.strip()
+        state["receiver"] = t
         state["step"]     = "subject"
         _mail_state[uid]  = state
-        _send(msg.chat.id, "📝  Тема письма:")
+        k = telebot.types.InlineKeyboardMarkup()
+        k.add(telebot.types.InlineKeyboardButton("❌ Отмена", callback_data="mail_cancel"))
+        upd(f"✉️  Mailer — шаг 2/3\n\n📬  Кому: {t}\n\n📝  Введи тему письма:", k)
 
     elif step == "subject":
         state["subject"] = msg.text.strip()
         state["step"]    = "body"
         _mail_state[uid] = state
-        _send(msg.chat.id, "📄  Текст письма (можно многострочный):")
+        k = telebot.types.InlineKeyboardMarkup()
+        k.add(telebot.types.InlineKeyboardButton("❌ Отмена", callback_data="mail_cancel"))
+        upd(f"✉️  Mailer — шаг 3/3\n\n📬  Кому: {state['receiver']}\n📋  Тема: {state['subject']}\n\n📄  Введи текст письма:", k)
 
     elif step == "body":
-        state["body"]    = msg.text.strip()
+        state["body"] = msg.text.strip()
         _mail_state.pop(uid, None)
 
         receiver = state["receiver"]
         subject  = state["subject"]
         body     = state["body"]
 
-        wait = _send(msg.chat.id,
-            f"📤  Отправляю через {len(MAIL_SENDERS)} аккаунтов...\n\n"
-            f"📬  Кому: {receiver}\n"
-            f"📋  Тема: {subject}")
+        # Определяем прокси — берём из пула пользователя или топа
+        u = get_user(uid)
+        proxy = u.get("proxy") if u.get("connected") else (cache["top_fast"][0] if cache["top_fast"] else None)
+        proxy_txt = f"🔒 через {proxy['host']}:{proxy['port']}" if proxy else "⚠️  без прокси (нет в пуле)"
+
+        k_cancel = None  # уже не нужна кнопка отмены
+        if mid:
+            try:
+                bot.edit_message_text(
+                    f"📤  Отправляю письма...\n\n"
+                    f"📬  Кому: {receiver}\n"
+                    f"📋  Тема: {subject}\n\n"
+                    f"{proxy_txt}\n"
+                    f"{lbar(0,len(MAIL_SENDERS))}  0/{len(MAIL_SENDERS)}",
+                    cid, mid)
+            except: mid = None
+        if not mid:
+            m2 = _send(cid, f"📤  Отправляю письма...\n\n📬  Кому: {receiver}")
+            mid = m2.message_id if m2 else None
 
         def do():
             ok = fail = 0
             results = []
-            for email, pwd in MAIL_SENDERS.items():
-                res = _send_one_email(receiver, email, pwd, subject, body)
+            total = len(MAIL_SENDERS)
+            for i, (email, pwd) in enumerate(MAIL_SENDERS.items(), 1):
+                # Обновляем прогресс
+                if mid:
+                    try:
+                        bot.edit_message_text(
+                            f"📤  Отправляю...\n\n"
+                            f"📬  Кому: {receiver}\n"
+                            f"📋  Тема: {subject}\n\n"
+                            f"{proxy_txt}\n"
+                            f"{lbar(i-1, total)}  {i-1}/{total}\n"
+                            f"⏳  {email}",
+                            cid, mid)
+                    except: pass
+                res, reason = _send_one_email(receiver, email, pwd, subject, body, proxy)
                 if res:
                     ok += 1
                     results.append(f"✅  {email}")
                 else:
                     fail += 1
-                    results.append(f"❌  {email}")
+                    results.append(f"❌  {email}  ({reason})")
                 time.sleep(0.5)
 
+            # Итоговый отчёт
+            status_emoji = "📨" if ok > 0 else "💀"
+            status_txt   = "Письма доставлены!" if ok > 0 else "Ни одно не ушло"
             report = (
-                f"📊  Отчёт рассылки\n\n"
-                f"📬  Кому: {receiver}\n"
-                f"📋  Тема: {subject}\n\n"
-                f"─────────────────────\n"
+                f"📊  Отчёт рассылки\n"
+                f"──────────────────────\n"
+                f"📬  Кому:   {receiver}\n"
+                f"📋  Тема:   {subject}\n"
+                f"{proxy_txt}\n"
+                f"──────────────────────\n"
                 + "\n".join(results) +
-                f"\n─────────────────────\n"
-                f"✅  Успешно: {ok}\n"
-                f"❌  Ошибок:  {fail}\n"
-                f"─────────────────────\n"
-                f"{'📨  Письма доставлены!' if ok > 0 else '⚠️  Ни одно письмо не ушло'}"
+                f"\n──────────────────────\n"
+                f"✅  Успешно: {ok} / {total}\n"
+                f"❌  Ошибок:  {fail} / {total}\n"
+                f"──────────────────────\n"
+                f"{status_emoji}  {status_txt}"
             )
-            if wait:
-                _edit(msg.chat.id, wait.message_id, report, kb_main(get_user(uid)["connected"]))
-            else:
-                _send(msg.chat.id, report)
+            kb = telebot.types.InlineKeyboardMarkup(row_width=2)
+            kb.add(
+                telebot.types.InlineKeyboardButton("🔄  Отправить снова", callback_data="mail_start"),
+                telebot.types.InlineKeyboardButton("◀  Меню", callback_data="mail_menu"),
+            )
+            if mid:
+                try: bot.edit_message_text(report, cid, mid, reply_markup=kb); return
+                except: pass
+            _send(cid, report, kb)
 
         threading.Thread(target=do, daemon=True).start()
 
