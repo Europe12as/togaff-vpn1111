@@ -1,10 +1,11 @@
 """
-  TOGAFF VPN · Ultimate Edition
-  pip install pyTelegramBotAPI requests[socks] PySocks
+  🌸 TOGAFF VPN · Astolfo Ultimate Edition 🌸
+  pip install pyTelegramBotAPI requests[socks] PySocks pystyle
   python3 togaff_vpn_bot.py
 """
 
 import telebot, requests, socket, threading, time, random, re, json, os
+import zlib, base64, gzip, lzma, marshal
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -18,7 +19,6 @@ ADMIN_IDS    = {7321093872}
 USERS_FILE   = "allowed_users.json"
 BANNED_FILE  = "banned_users.json"
 
-# Фото при старте — положи рядом с ботом
 WELCOME_PHOTO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "astolfo.png")
 
 TOP_FAST_COUNT = 30
@@ -37,18 +37,21 @@ except ImportError:
 bot = telebot.TeleBot(TOKEN, parse_mode=None)
 
 # ═══════════════════════════════════════
-#           ДОСТУП / WHITELIST
+#           ДОСТУП / WHITELIST  (FIX: int/str ID)
 # ═══════════════════════════════════════
 def _load(path, default):
     try:
         if os.path.exists(path):
-            return json.load(open(path))
-    except: pass
+            return json.load(open(path, encoding="utf-8"))
+    except:
+        pass
     return default
 
 def _save(path, data):
-    try: json.dump(data, open(path,"w"), ensure_ascii=False, indent=2)
-    except: pass
+    try:
+        json.dump(data, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    except:
+        pass
 
 allowed_users: dict = _load(USERS_FILE, {})
 banned_users:  set  = set(_load(BANNED_FILE, []))
@@ -56,49 +59,63 @@ _save_lock = threading.Lock()
 
 def save_users():
     with _save_lock:
-        _save(USERS_FILE,  {str(k): v for k,v in allowed_users.items()})
+        _save(USERS_FILE,  {str(k): v for k, v in allowed_users.items()})
         _save(BANNED_FILE, list(banned_users))
 
-def is_admin(uid):  return uid in ADMIN_IDS
+def is_admin(uid):
+    return int(uid) in ADMIN_IDS
+
+def is_banned(uid):
+    return int(uid) in {int(b) for b in banned_users}
+
 def is_allowed(uid):
-    if is_admin(uid): return True
-    if uid in banned_users: return False
+    uid = int(uid)
+    if is_admin(uid):
+        return True
+    if is_banned(uid):
+        return False
+    # FIX: проверяем и int и str ключи
     return str(uid) in allowed_users or uid in allowed_users
 
 def access_required(fn):
     def wrapper(obj, *a, **kw):
         try:
             uid  = obj.from_user.id
-            chat = obj.chat.id if hasattr(obj,"chat") and obj.chat else obj.message.chat.id
-        except: return
+            chat = obj.chat.id if hasattr(obj, "chat") and obj.chat else obj.message.chat.id
+        except:
+            return
         if not is_allowed(uid):
-            _send(chat, "🔒 Доступ закрыт\n\nБот работает только по приглашению.\nОбратись к администратору.")
+            _send(chat,
+                "🌸 Привет, анон!\n\n"
+                "🔒 Доступ закрыт — бот работает только по приглашению.\n"
+                "Напиши администратору чтобы получить доступ~ 💕")
             return
         return fn(obj, *a, **kw)
     wrapper.__name__ = fn.__name__
     return wrapper
 
-def ts(): return datetime.now().strftime("%d.%m %H:%M")
+def ts():
+    return datetime.now().strftime("%d.%m %H:%M")
 
 # ═══════════════════════════════════════
-#            СВОИ ПРОКСИ
+#            МОИ ПРОКСИ
 # ═══════════════════════════════════════
 MY_PROXIES_HTTP = [
-    ("185.221.160.253",80), ("185.221.160.214",80), ("87.239.31.42",80),
-    ("109.197.153.121",8888), ("188.235.146.220",80), ("94.26.241.120",80),
-    ("89.23.112.143",80), ("91.222.238.112",80), ("82.208.111.19",8080),
-    ("185.244.173.101",80), ("185.221.152.147",80), ("91.107.124.250",80),
-    ("212.96.201.54",80), ("5.180.241.126",80), ("195.91.179.91",80),
-    ("95.217.105.20",80), ("37.120.189.106",80), ("89.31.143.1",80),
-    ("78.47.138.199",80), ("89.31.143.2",80), ("195.201.34.206",80),
-    ("89.31.143.3",80), ("167.86.97.239",8080), ("138.201.245.91",8080),
-    ("89.31.143.12",80), ("51.178.43.147",80), ("87.247.251.24",80),
-    ("83.143.145.67",80), ("85.26.218.76",80), ("162.19.226.235",80),
-    ("5.188.31.212",80), ("87.247.251.240",80), ("207.254.28.68",80),
-    ("104.167.29.113",80), ("116.202.102.255",80), ("77.238.66.2",80),
-    ("217.115.115.252",80), ("85.187.17.39",80), ("213.135.166.142",80),
-    ("217.145.93.115",80), ("141.105.107.34",80), ("93.170.73.47",80),
-    ("31.7.38.227",80),
+    ("185.221.160.253", 80), ("185.221.160.214", 80), ("87.239.31.42", 80),
+    ("109.197.153.121", 8888), ("188.235.146.220", 80), ("94.26.241.120", 80),
+    ("89.23.112.143", 80), ("91.222.238.112", 80), ("82.208.111.19", 8080),
+    ("185.244.173.101", 80), ("185.221.152.147", 80), ("91.107.124.250", 80),
+    ("212.96.201.54", 80), ("5.180.241.126", 80), ("195.91.179.91", 80),
+    ("95.217.105.20", 80), ("37.120.189.106", 80), ("89.31.143.1", 80),
+    ("78.47.138.199", 80), ("89.31.143.2", 80), ("195.201.34.206", 80),
+    ("89.31.143.3", 80), ("167.86.97.239", 8080), ("138.201.245.91", 8080),
+    ("89.31.143.12", 80), ("51.178.43.147", 80), ("87.247.251.24", 80),
+    ("83.143.145.67", 80), ("85.26.218.76", 80), ("162.19.226.235", 80),
+    ("5.188.31.212", 80), ("87.247.251.240", 80), ("207.254.28.68", 80),
+    ("104.167.29.113", 80), ("116.202.102.255", 80), ("77.238.66.2", 80),
+    ("217.115.115.252", 80), ("85.187.17.39", 80), ("213.135.166.142", 80),
+    ("217.145.93.115", 80), ("141.105.107.34", 80), ("93.170.73.47", 80),
+    ("31.7.38.227", 80),
 ]
 
 # ═══════════════════════════════════════
@@ -138,19 +155,20 @@ SOURCES = {
 #               КЭШ
 # ═══════════════════════════════════════
 cache = {
-    "socks5":[], "socks4":[], "http":[],
-    "updated":0, "top_fast":[], "top_updated":0,
+    "socks5": [], "socks4": [], "http": [],
+    "updated": 0, "top_fast": [], "top_updated": 0,
     "scan_lock": threading.Lock(),
 }
 users = {}
 
 def get_user(uid):
+    uid = int(uid)
     if uid not in users:
         users[uid] = {
-            "connected":False, "proxy":None, "connect_time":None,
-            "ip_before":None, "ip_after":None,
-            "sessions":0, "total_rotates":0,
-            "bytes_up":0, "bytes_down":0,
+            "connected": False, "proxy": None, "connect_time": None,
+            "ip_before": None, "ip_after": None,
+            "sessions": 0, "total_rotates": 0,
+            "bytes_up": 0, "bytes_down": 0,
         }
     return users[uid]
 
@@ -159,43 +177,51 @@ def get_user(uid):
 # ═══════════════════════════════════════
 def fetch_list(url, timeout=14):
     try:
-        r = requests.get(url, timeout=timeout, headers={"User-Agent":"Mozilla/5.0"})
-        if r.status_code != 200: return []
+        r = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0"})
+        if r.status_code != 200:
+            return []
         out = []
         for line in r.text.splitlines():
-            line = re.sub(r"^(socks[45]|https?|connect)://","",line.strip(),flags=re.I)
-            m = re.match(r"^(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})",line)
-            if m: out.append((m.group(1), int(m.group(2))))
+            line = re.sub(r"^(socks[45]|https?|connect)://", "", line.strip(), flags=re.I)
+            m = re.match(r"^(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})", line)
+            if m:
+                out.append((m.group(1), int(m.group(2))))
         return out
-    except: return []
+    except:
+        return []
 
 def refresh_cache(force=False):
-    if not force and time.time()-cache["updated"] < CACHE_TTL: return
-    print("Загружаю прокси...")
-    my_seen = {f"{h}:{p}" for h,p in MY_PROXIES_HTTP}
+    if not force and time.time() - cache["updated"] < CACHE_TTL:
+        return
+    print("🌸 Загружаю прокси...")
+    my_seen = {f"{h}:{p}" for h, p in MY_PROXIES_HTTP}
     my_list = list(MY_PROXIES_HTTP)
     with ThreadPoolExecutor(max_workers=8) as ex:
         for ptype, urls in SOURCES.items():
-            base = list(my_list) if ptype=="http" else []
-            seen = set(my_seen)  if ptype=="http" else set()
-            futs = {ex.submit(fetch_list,url):url for url in urls}
+            base = list(my_list) if ptype == "http" else []
+            seen = set(my_seen) if ptype == "http" else set()
+            futs = {ex.submit(fetch_list, url): url for url in urls}
             for fut in as_completed(futs):
-                for h,p in fut.result():
+                for h, p in fut.result():
                     k = f"{h}:{p}"
                     if k not in seen:
-                        seen.add(k); base.append((h,p))
-                if len(base)>=800: break
-            if ptype=="http":
-                tail=base[len(my_list):]; random.shuffle(tail)
-                cache[ptype]=(my_list+tail)[:500]
+                        seen.add(k)
+                        base.append((h, p))
+                if len(base) >= 800:
+                    break
+            if ptype == "http":
+                tail = base[len(my_list):]
+                random.shuffle(tail)
+                cache[ptype] = (my_list + tail)[:500]
             else:
-                random.shuffle(base); cache[ptype]=base[:500]
+                random.shuffle(base)
+                cache[ptype] = base[:500]
             print(f"  {ptype}: {len(cache[ptype])}")
-    cache["updated"]=time.time()
-    print("Кэш обновлён")
+    cache["updated"] = time.time()
+    print("✅ Кэш обновлён")
 
 # ═══════════════════════════════════════
-#       ПРОВЕРКА ПРОКСИ — ДВИЖОК
+#       ПРОВЕРКА ПРОКСИ
 # ═══════════════════════════════════════
 IP_URLS = [
     "http://api.ipify.org",
@@ -208,24 +234,30 @@ IP_URLS = [
 def tcp_ping(host, port, timeout=1.5):
     try:
         t0 = time.time()
-        with socket.create_connection((host,port), timeout=timeout): pass
-        return round((time.time()-t0)*1000, 1)
-    except: return None
+        with socket.create_connection((host, port), timeout=timeout):
+            pass
+        return round((time.time() - t0) * 1000, 1)
+    except:
+        return None
 
 def _proxy_url(ptype, host, port):
-    if ptype=="socks5" and SOCKS_OK: return f"socks5h://{host}:{port}"
-    if ptype=="socks4" and SOCKS_OK: return f"socks4://{host}:{port}"
+    if ptype == "socks5" and SOCKS_OK:
+        return f"socks5h://{host}:{port}"
+    if ptype == "socks4" and SOCKS_OK:
+        return f"socks4://{host}:{port}"
     return f"http://{host}:{port}"
 
 def get_ip_via(ptype, host, port, timeout=7):
-    prx = {"http":_proxy_url(ptype,host,port),"https":_proxy_url(ptype,host,port)}
+    prx = {"http": _proxy_url(ptype, host, port), "https": _proxy_url(ptype, host, port)}
     for url in IP_URLS:
         try:
             r = requests.get(url, proxies=prx, timeout=timeout,
-                             headers={"User-Agent":"curl/7.80.0"})
+                             headers={"User-Agent": "curl/7.80.0"})
             ip = r.text.strip().split()[0]
-            if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$",ip): return ip
-        except: continue
+            if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", ip):
+                return ip
+        except:
+            continue
     return None
 
 def get_my_ip(timeout=7):
@@ -233,238 +265,436 @@ def get_my_ip(timeout=7):
         try:
             r = requests.get(url, timeout=timeout)
             ip = r.text.strip().split()[0]
-            if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$",ip): return ip
-        except: continue
+            if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", ip):
+                return ip
+        except:
+            continue
     return None
 
 def verify_proxy(ptype, host, port, my_ip, tcp_t=1.5, ip_t=7):
     ms = tcp_ping(host, port, timeout=tcp_t)
-    if ms is None: return None
+    if ms is None:
+        return None
     new_ip = get_ip_via(ptype, host, port, timeout=ip_t)
-    if not new_ip: return None
-    if my_ip and new_ip==my_ip: return None
-    return {"type":ptype,"host":host,"port":port,"ping":ms,
-            "new_ip":new_ip,"verified_at":time.time()}
+    if not new_ip:
+        return None
+    if my_ip and new_ip == my_ip:
+        return None
+    return {"type": ptype, "host": host, "port": port, "ping": ms,
+            "new_ip": new_ip, "verified_at": time.time()}
 
 # ═══════════════════════════════════════
-#       СМАРТ-ПУЛ БЫСТРЫХ ПРОКСИ
+#       СМАРТ-ПУЛ
 # ═══════════════════════════════════════
 def _all_candidates(ptype_filter=None):
-    order = (["socks5","socks4","http"] if SOCKS_OK else ["http","socks4","socks5"])
-    if ptype_filter: order=[ptype_filter]
-    out=[]; seen=set()
-    if not ptype_filter or ptype_filter=="http":
-        for h,p in MY_PROXIES_HTTP:
-            if (h,p) not in seen: seen.add((h,p)); out.append(("http",h,p))
+    order = (["socks5", "socks4", "http"] if SOCKS_OK else ["http", "socks4", "socks5"])
+    if ptype_filter:
+        order = [ptype_filter]
+    out = []
+    seen = set()
+    if not ptype_filter or ptype_filter == "http":
+        for h, p in MY_PROXIES_HTTP:
+            if (h, p) not in seen:
+                seen.add((h, p))
+                out.append(("http", h, p))
     for pt in order:
-        pool=list(cache[pt]); random.shuffle(pool)
-        for h,p in pool:
-            if (h,p) not in seen: seen.add((h,p)); out.append((pt,h,p))
+        pool = list(cache[pt])
+        random.shuffle(pool)
+        for h, p in pool:
+            if (h, p) not in seen:
+                seen.add((h, p))
+                out.append((pt, h, p))
     return out
 
 def _tcp_scan(candidates, workers=60, timeout=1.2):
-    results=[]; lock=threading.Lock()
+    results = []
+    lock = threading.Lock()
+
     def chk(args):
-        pt,h,p=args; ms=tcp_ping(h,p,timeout=timeout)
+        pt, h, p = args
+        ms = tcp_ping(h, p, timeout=timeout)
         if ms is not None:
-            with lock: results.append((ms,pt,h,p))
+            with lock:
+                results.append((ms, pt, h, p))
+
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        list(as_completed([ex.submit(chk,c) for c in candidates]))
-    results.sort(); return [(pt,h,p,ms) for ms,pt,h,p in results]
+        list(as_completed([ex.submit(chk, c) for c in candidates]))
+    results.sort()
+    return [(pt, h, p, ms) for ms, pt, h, p in results]
 
 def build_smart_pool(my_ip=None, sample=SCAN_SAMPLE,
                      workers=VERIFY_WORKERS, tcp_cb=None, http_cb=None):
-    if my_ip is None: my_ip=get_my_ip() or ""
+    if my_ip is None:
+        my_ip = get_my_ip() or ""
     refresh_cache()
-    all_c=_all_candidates(); random.shuffle(all_c); cands=all_c[:sample]
-    total=len(cands); tcp_done=[0]; lock=threading.Lock()
+    all_c = _all_candidates()
+    random.shuffle(all_c)
+    cands = all_c[:sample]
+    total = len(cands)
+    tcp_done = [0]
+    lock = threading.Lock()
 
     def tcp_chk(args):
-        pt,h,p=args; ms=tcp_ping(h,p,timeout=1.2)
+        pt, h, p = args
+        ms = tcp_ping(h, p, timeout=1.2)
         with lock:
-            tcp_done[0]+=1
-            if tcp_cb: tcp_cb(tcp_done[0],total)
-        return (ms,pt,h,p) if ms else None
+            tcp_done[0] += 1
+            if tcp_cb:
+                tcp_cb(tcp_done[0], total)
+        return (ms, pt, h, p) if ms else None
 
-    alive_raw=[]
+    alive_raw = []
     with ThreadPoolExecutor(max_workers=60) as ex:
-        for res in as_completed([ex.submit(tcp_chk,c) for c in cands]):
-            r=res.result()
-            if r: alive_raw.append(r)
-    alive_raw.sort(); alive=[(pt,h,p,ms) for ms,pt,h,p in alive_raw]
+        for res in as_completed([ex.submit(tcp_chk, c) for c in cands]):
+            r = res.result()
+            if r:
+                alive_raw.append(r)
+    alive_raw.sort()
+    alive = [(pt, h, p, ms) for ms, pt, h, p in alive_raw]
     print(f"  TCP живых: {len(alive)}/{total}")
+    if not alive:
+        return []
 
-    if not alive: return []
-
-    http_total=len(alive); http_done=[0]; lock2=threading.Lock(); results=[]; rlock=threading.Lock()
+    http_total = len(alive)
+    http_done = [0]
+    lock2 = threading.Lock()
+    results = []
+    rlock = threading.Lock()
 
     def http_chk(args):
-        pt,h,p,ms=args
-        new_ip=get_ip_via(pt,h,p,timeout=7)
+        pt, h, p, ms = args
+        new_ip = get_ip_via(pt, h, p, timeout=7)
         with lock2:
-            http_done[0]+=1
-            if http_cb: http_cb(http_done[0],http_total)
-        if not new_ip or new_ip==my_ip: return None
-        return {"type":pt,"host":h,"port":p,"ping":ms,
-                "new_ip":new_ip,"verified_at":time.time()}
+            http_done[0] += 1
+            if http_cb:
+                http_cb(http_done[0], http_total)
+        if not new_ip or new_ip == my_ip:
+            return None
+        return {"type": pt, "host": h, "port": p, "ping": ms,
+                "new_ip": new_ip, "verified_at": time.time()}
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        for res in as_completed([ex.submit(http_chk,a) for a in alive]):
-            r=res.result()
+        for res in as_completed([ex.submit(http_chk, a) for a in alive]):
+            r = res.result()
             if r:
-                with rlock: results.append(r)
+                with rlock:
+                    results.append(r)
 
-    results.sort(key=lambda x:x["ping"])
-    cache["top_fast"]=results[:TOP_FAST_COUNT]
-    cache["top_updated"]=time.time()
-    print(f"Смарт-пул: {len(cache['top_fast'])} прокси")
+    results.sort(key=lambda x: x["ping"])
+    cache["top_fast"] = results[:TOP_FAST_COUNT]
+    cache["top_updated"] = time.time()
+    print(f"🌸 Смарт-пул: {len(cache['top_fast'])} прокси")
     return cache["top_fast"]
 
 def smart_pool_refresh_bg(my_ip=""):
-    if time.time()-cache["top_updated"]>TOP_TTL and not cache["scan_lock"].locked():
+    if time.time() - cache["top_updated"] > TOP_TTL and not cache["scan_lock"].locked():
         def bg():
-            with cache["scan_lock"]: build_smart_pool(my_ip, sample=SCAN_SAMPLE//2)
-        threading.Thread(target=bg,daemon=True).start()
+            with cache["scan_lock"]:
+                build_smart_pool(my_ip, sample=SCAN_SAMPLE // 2)
+        threading.Thread(target=bg, daemon=True).start()
 
 def find_best_proxy(my_ip, exclude=None, ptype_filter=None, on_try=None):
-    """
-    1) Параллельная перепроверка горячего пула
-    2) Батч-поиск по всей базе если пул пуст/протух
-    """
-    pool=[p for p in cache["top_fast"]
-          if (not exclude or p["host"]!=exclude)
-          and (not ptype_filter or p["type"]==ptype_filter)]
+    pool = [p for p in cache["top_fast"]
+            if (not exclude or p["host"] != exclude)
+            and (not ptype_filter or p["type"] == ptype_filter)]
 
     if pool:
-        found=[None]; stop=threading.Event(); lock=threading.Lock()
+        found = [None]
+        stop = threading.Event()
+        lock = threading.Lock()
+
         def recheck(px):
-            if stop.is_set(): return
-            r=verify_proxy(px["type"],px["host"],px["port"],my_ip,tcp_t=1.5,ip_t=7)
+            if stop.is_set():
+                return
+            r = verify_proxy(px["type"], px["host"], px["port"], my_ip, tcp_t=1.5, ip_t=7)
             if r and not stop.is_set():
                 with lock:
-                    if found[0] is None: found[0]=r; stop.set()
-        with ThreadPoolExecutor(max_workers=min(len(pool),20)) as ex:
-            for f in as_completed([ex.submit(recheck,px) for px in pool]):
-                if stop.is_set(): break
-        if found[0]: return found[0]
+                    if found[0] is None:
+                        found[0] = r
+                        stop.set()
+
+        with ThreadPoolExecutor(max_workers=min(len(pool), 20)) as ex:
+            for f in as_completed([ex.submit(recheck, px) for px in pool]):
+                if stop.is_set():
+                    break
+        if found[0]:
+            return found[0]
 
     refresh_cache()
-    all_c=_all_candidates(ptype_filter)
-    if exclude: all_c=[(pt,h,p) for pt,h,p in all_c if h!=exclude]
+    all_c = _all_candidates(ptype_filter)
+    if exclude:
+        all_c = [(pt, h, p) for pt, h, p in all_c if h != exclude]
 
-    batch=80; n=0
-    for i in range(0, min(len(all_c), VERIFY_LIMIT*2), batch):
-        chunk=all_c[i:i+batch]
-        alive=_tcp_scan(chunk, workers=60, timeout=1.2)
-        n+=len(chunk)
-        if on_try: on_try(n, alive[0][0] if alive else "...",
-                         alive[0][1] if alive else "...",
-                         alive[0][2] if alive else 0)
-        if not alive: continue
+    batch = 80
+    n = 0
+    for i in range(0, min(len(all_c), VERIFY_LIMIT * 2), batch):
+        chunk = all_c[i:i + batch]
+        alive = _tcp_scan(chunk, workers=60, timeout=1.2)
+        n += len(chunk)
+        if on_try:
+            on_try(n,
+                   alive[0][0] if alive else "...",
+                   alive[0][1] if alive else "...",
+                   alive[0][2] if alive else 0)
+        if not alive:
+            continue
 
-        found=[None]; stop=threading.Event(); lock=threading.Lock()
+        found = [None]
+        stop = threading.Event()
+        lock = threading.Lock()
+
         def http_find(args):
-            pt,h,p,ms=args
-            if stop.is_set(): return
-            new_ip=get_ip_via(pt,h,p,timeout=7)
-            if new_ip and new_ip!=my_ip and not stop.is_set():
+            pt, h, p, ms = args
+            if stop.is_set():
+                return
+            new_ip = get_ip_via(pt, h, p, timeout=7)
+            if new_ip and new_ip != my_ip and not stop.is_set():
                 with lock:
                     if found[0] is None:
-                        found[0]={"type":pt,"host":h,"port":p,"ping":ms,
-                                  "new_ip":new_ip,"verified_at":time.time()}
+                        found[0] = {"type": pt, "host": h, "port": p, "ping": ms,
+                                    "new_ip": new_ip, "verified_at": time.time()}
                         stop.set()
+
         with ThreadPoolExecutor(max_workers=VERIFY_WORKERS) as ex:
-            for f in as_completed([ex.submit(http_find,a) for a in alive]):
-                if stop.is_set(): break
-        if found[0]: return found[0]
+            for f in as_completed([ex.submit(http_find, a) for a in alive]):
+                if stop.is_set():
+                    break
+        if found[0]:
+            return found[0]
     return None
 
 # ═══════════════════════════════════════
-#              УТИЛИТЫ UI
+#          ДЕОБФУСКАТОР (встроенный)
+# ═══════════════════════════════════════
+_exec_pattern = r"exec\(\(_\)\(b'(.+?)'\)\)"
+_comments_pat = r"#(.*?)\n"
+_deobf_note   = "# DECODED BY @ArrhythmiaFucksn\n\n"
+
+_obfuscation_patterns = {
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\);": "base64",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\);": "base32",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\);": "base16",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(__\[::-1\]\);":  "zlib",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(__\[::-1\]\);":  "gzip",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(__\[::-1\]\);":  "lzma",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\);": "base64+zlib",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\);": "base64+gzip",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\);": "base64+lzma",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\);": "base32+zlib",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\);": "base32+gzip",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\);": "base32+lzma",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\);": "base16+zlib",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\);": "base16+gzip",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\);": "base16+lzma",
+    r"_=lambda __:__import__\('marshal'\)\.loads\(__import__\('gzip'\)\.decompress\(__import__\('lzma'\)\.decompress\(__import__\('zlib'\)\.decompress\(__import__\('base64'\)\.b64decode\(__\[::-1\]\)\)\)\)\);exec\(_\('(.*?)'\)\)": "rendy (marshal+gzip+lzma+zlib+base64)",
+}
+
+def _strip_comments(code: str) -> str:
+    return re.sub(_comments_pat, "", code)
+
+def _deobf_b64(code: str) -> str:
+    def dec(m):
+        s = m.group(1)
+        pad = len(s) % 4
+        if pad:
+            s += "=" * (8 - pad)
+        return base64.b64decode(s[::-1]).decode("utf-8", errors="replace")
+    while re.search(_exec_pattern, code):
+        code = re.sub(_exec_pattern, dec, code)
+        code = re.sub(r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\);", "", code)
+    return _strip_comments(code).strip()
+
+def _deobf_b32(code: str) -> str:
+    def dec(m):
+        s = m.group(1)
+        pad = len(s) % 4
+        if pad:
+            s += "=" * (8 - pad)
+        return base64.b32decode(s[::-1]).decode("utf-8", errors="replace")
+    while re.search(_exec_pattern, code):
+        code = re.sub(_exec_pattern, dec, code)
+        code = re.sub(r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\);", "", code)
+    return _strip_comments(code).strip()
+
+def _deobf_b16(code: str) -> str:
+    def dec(m):
+        return base64.b16decode(m.group(1)[::-1]).decode("utf-8", errors="replace")
+    while re.search(_exec_pattern, code):
+        code = re.sub(_exec_pattern, dec, code)
+        code = re.sub(r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\);", "", code)
+    return _strip_comments(code).strip()
+
+def _deobf_combo(code: str, base_fn, compress_mod) -> str:
+    def dec(m):
+        s = m.group(1)
+        pad = len(s) % 4
+        if pad:
+            s += "=" * (8 - pad)
+        decoded = base_fn(s[::-1])
+        return compress_mod.decompress(decoded).decode("utf-8", errors="replace")
+    while re.search(_exec_pattern, code):
+        code = re.sub(_exec_pattern, dec, code)
+    return _strip_comments(code).strip()
+
+def detect_obfuscation(code: str) -> str:
+    for pat, name in _obfuscation_patterns.items():
+        if re.search(pat, code):
+            return name
+    return None
+
+def deobfuscate_code(code: str) -> tuple:
+    """Returns (deobfuscated_code, method_name) or (None, error_msg)"""
+    method = detect_obfuscation(code)
+    if not method:
+        return None, "Обфускация не обнаружена"
+    try:
+        result = None
+        if method == "base64":
+            result = _deobf_b64(code)
+        elif method == "base32":
+            result = _deobf_b32(code)
+        elif method == "base16":
+            result = _deobf_b16(code)
+        elif method == "base64+zlib":
+            result = _deobf_combo(code, base64.b64decode, zlib)
+        elif method == "base64+gzip":
+            result = _deobf_combo(code, base64.b64decode, gzip)
+        elif method == "base64+lzma":
+            result = _deobf_combo(code, base64.b64decode, lzma)
+        elif method == "base32+zlib":
+            result = _deobf_combo(code, base64.b32decode, zlib)
+        elif method == "base32+gzip":
+            result = _deobf_combo(code, base64.b32decode, gzip)
+        elif method == "base32+lzma":
+            result = _deobf_combo(code, base64.b32decode, lzma)
+        elif method == "base16+zlib":
+            result = _deobf_combo(code, base64.b16decode, zlib)
+        elif method == "base16+gzip":
+            result = _deobf_combo(code, base64.b16decode, gzip)
+        elif method == "base16+lzma":
+            result = _deobf_combo(code, base64.b16decode, lzma)
+        elif "rendy" in method:
+            pat = r"_=lambda __:__import__\('marshal'\)\.loads\(.+?\);exec\(_\('(.*?)'\)\)"
+            m = re.search(pat, code)
+            if m:
+                enc = m.group(1)
+                raw = base64.b64decode(enc[::-1])
+                raw = zlib.decompress(raw)
+                raw = lzma.decompress(raw)
+                raw = gzip.decompress(raw)
+                result = marshal.loads(raw).decode("utf-8", errors="replace")
+        if result:
+            return _deobf_note + result, method
+        return None, f"Не удалось декодировать ({method})"
+    except Exception as e:
+        return None, f"Ошибка: {e}"
+
+# Состояние деобфускатора по юзеру
+_deobf_state = {}  # uid -> "waiting"
+
+# ═══════════════════════════════════════
+#              УТИЛИТЫ UI  🌸
 # ═══════════════════════════════════════
 def fmt_time(s):
-    h=int(s//3600); m=int((s%3600)//60); sc=int(s%60)
-    if h: return f"{h}ч {m:02d}м {sc:02d}с"
-    if m: return f"{m}м {sc:02d}с"
+    h = int(s // 3600)
+    m = int((s % 3600) // 60)
+    sc = int(s % 60)
+    if h:
+        return f"{h}ч {m:02d}м {sc:02d}с"
+    if m:
+        return f"{m}м {sc:02d}с"
     return f"{sc}с"
 
 def ping_bar(ms):
-    if ms is None:  return "⬜⬜⬜⬜⬜  нет данных"
-    if ms<80:       return "🟩🟩🟩🟩🟩  молниеносно"
-    if ms<150:      return "🟩🟩🟩🟩⬜  отлично"
-    if ms<250:      return "🟨🟨🟨⬜⬜  хорошо"
-    if ms<400:      return "🟧🟧⬜⬜⬜  средне"
-    return                 "🟥⬜⬜⬜⬜  медленно"
+    if ms is None:   return "⬜⬜⬜⬜⬜  нет данных"
+    if ms < 80:      return "🟩🟩🟩🟩🟩  молниеносно~"
+    if ms < 150:     return "🟩🟩🟩🟩⬜  отлично!"
+    if ms < 250:     return "🟨🟨🟨⬜⬜  хорошо"
+    if ms < 400:     return "🟧🟧⬜⬜⬜  средне"
+    return                  "🟥⬜⬜⬜⬜  медленно..."
 
 def proto_icon(pt):
-    return {"socks5":"🔵","socks4":"🟣","http":"⚪","https":"🔐"}.get(pt,"⚫")
+    return {"socks5": "🔵", "socks4": "🟣", "http": "⚪", "https": "🔐"}.get(pt, "⚫")
 
 def lbar(n, total=100, w=10):
-    f=min(int(w*n/max(total,1)),w)
-    return "▰"*f+"▱"*(w-f)
+    f = min(int(w * n / max(total, 1)), w)
+    return "▰" * f + "▱" * (w - f)
+
+ASTOLFO_ART = (
+    "🌸✨ TOGAFF VPN ✨🌸\n"
+    "   (\\(\\  \n"
+    "   ( •ω•) 💕\n"
+    "   o🎀 🌸\n"
+    "  ╰━━━━━╯"
+)
 
 # ═══════════════════════════════════════
-#     ВСПОМОГАТЕЛЬНАЯ ОТПРАВКА (БЕЗ MARKDOWN)
+#     ОТПРАВКА / РЕДАКТИРОВАНИЕ
 # ═══════════════════════════════════════
 def _send(chat_id, text, kb=None):
     try:
         return bot.send_message(chat_id, text, reply_markup=kb)
     except Exception as e:
-        print(f"[send] ERR {e}")
+        print(f"[send ERR] {e}")
         return None
 
 def _edit(chat_id, msg_id, text, kb=None):
     try:
         return bot.edit_message_text(text, chat_id, msg_id, reply_markup=kb)
     except Exception as e:
-        print(f"[edit] ERR {e}")
+        print(f"[edit ERR] {e}")
 
 def _updater(chat_id, msg_id):
-    """Возвращает функцию-апдейтер с rate-limit 1.6с."""
-    last=[0.0]
+    last = [0.0]
+
     def upd(text, kb=None, force=False):
-        now=time.time()
-        if not force and now-last[0]<1.6: return
-        last[0]=now; _edit(chat_id,msg_id,text,kb)
+        now = time.time()
+        if not force and now - last[0] < 1.6:
+            return
+        last[0] = now
+        _edit(chat_id, msg_id, text, kb)
+
     return upd
 
 # ═══════════════════════════════════════
-#           КЛАВИАТУРЫ
+#           КЛАВИАТУРЫ  🌸
 # ═══════════════════════════════════════
 def kb_main(connected=False):
-    k=telebot.types.InlineKeyboardMarkup(row_width=2)
+    k = telebot.types.InlineKeyboardMarkup(row_width=2)
     if connected:
         k.add(
-            telebot.types.InlineKeyboardButton("🔴 Отключить",  callback_data="disconnect"),
-            telebot.types.InlineKeyboardButton("🔄 Сменить IP", callback_data="rotate"),
+            telebot.types.InlineKeyboardButton("🔴 Отключить",   callback_data="disconnect"),
+            telebot.types.InlineKeyboardButton("🔄 Сменить IP",  callback_data="rotate"),
         )
         k.add(
-            telebot.types.InlineKeyboardButton("📋 Конфиг",     callback_data="generate"),
-            telebot.types.InlineKeyboardButton("📊 Статус",     callback_data="status"),
+            telebot.types.InlineKeyboardButton("📋 Конфиг",      callback_data="generate"),
+            telebot.types.InlineKeyboardButton("📊 Статус",      callback_data="status"),
         )
     else:
         k.add(telebot.types.InlineKeyboardButton("⚡ Быстрое подключение", callback_data="connect"))
         k.add(
-            telebot.types.InlineKeyboardButton("📊 Статус",    callback_data="status"),
-            telebot.types.InlineKeyboardButton("🗂 Серверы",   callback_data="proxies"),
+            telebot.types.InlineKeyboardButton("📊 Статус",     callback_data="status"),
+            telebot.types.InlineKeyboardButton("🗂 Серверы",    callback_data="proxies"),
         )
     k.add(
         telebot.types.InlineKeyboardButton("🔵 SOCKS5", callback_data="c_socks5"),
         telebot.types.InlineKeyboardButton("🟣 SOCKS4",  callback_data="c_socks4"),
         telebot.types.InlineKeyboardButton("⚪ HTTP",    callback_data="c_http"),
     )
-    k.add(telebot.types.InlineKeyboardButton("🌐 Веб-панель",
-        web_app=telebot.types.WebAppInfo(url=MINI_APP_URL)))
+    k.add(telebot.types.InlineKeyboardButton("🔓 Деобфускатор", callback_data="deobf_menu"))
+    if True:  # mini app
+        k.add(telebot.types.InlineKeyboardButton("🌐 Веб-панель",
+              web_app=telebot.types.WebAppInfo(url=MINI_APP_URL)))
     return k
 
 def kb_generate():
-    k=telebot.types.InlineKeyboardMarkup(row_width=1)
-    k.add(telebot.types.InlineKeyboardButton("🔄 Другой прокси",  callback_data="regen"))
-    k.add(telebot.types.InlineKeyboardButton("◀ Назад",            callback_data="back_main"))
+    k = telebot.types.InlineKeyboardMarkup(row_width=1)
+    k.add(telebot.types.InlineKeyboardButton("🔄 Другой прокси", callback_data="regen"))
+    k.add(telebot.types.InlineKeyboardButton("◀ Назад",          callback_data="back_main"))
     return k
 
 def kb_admin():
-    k=telebot.types.InlineKeyboardMarkup(row_width=2)
+    k = telebot.types.InlineKeyboardMarkup(row_width=2)
     k.add(
         telebot.types.InlineKeyboardButton("👥 Пользователи",  callback_data="adm_users"),
         telebot.types.InlineKeyboardButton("🚫 Бан-лист",      callback_data="adm_banned"),
@@ -481,97 +711,225 @@ def kb_admin():
     return k
 
 def kb_proxy_list(proxies, page=0):
-    """Клавиатура ручного выбора прокси из топа."""
-    k=telebot.types.InlineKeyboardMarkup(row_width=1)
-    per=5; start=page*per; chunk=proxies[start:start+per]
-    for i,p in enumerate(chunk):
-        label=f"{proto_icon(p['type'])} {p['host']}:{p['port']}  {p['ping']}ms"
+    k = telebot.types.InlineKeyboardMarkup(row_width=1)
+    per = 5
+    start = page * per
+    chunk = proxies[start:start + per]
+    for i, p in enumerate(chunk):
+        label = f"{proto_icon(p['type'])} {p['host']}:{p['port']}  {p['ping']}ms"
         k.add(telebot.types.InlineKeyboardButton(label,
-              callback_data=f"pick_{start+i}"))
-    row=[]
-    if page>0: row.append(telebot.types.InlineKeyboardButton("◀",callback_data=f"pxpage_{page-1}"))
-    if start+per<len(proxies): row.append(telebot.types.InlineKeyboardButton("▶",callback_data=f"pxpage_{page+1}"))
-    if row: k.add(*row)
-    k.add(telebot.types.InlineKeyboardButton("◀ Назад",callback_data="back_main"))
+              callback_data=f"pick_{start + i}"))
+    row = []
+    if page > 0:
+        row.append(telebot.types.InlineKeyboardButton("◀", callback_data=f"pxpage_{page-1}"))
+    if start + per < len(proxies):
+        row.append(telebot.types.InlineKeyboardButton("▶", callback_data=f"pxpage_{page+1}"))
+    if row:
+        k.add(*row)
+    k.add(telebot.types.InlineKeyboardButton("◀ Назад", callback_data="back_main"))
+    return k
+
+def kb_deobf():
+    k = telebot.types.InlineKeyboardMarkup(row_width=1)
+    k.add(telebot.types.InlineKeyboardButton("🔍 Определить обфускацию", callback_data="deobf_detect"))
+    k.add(telebot.types.InlineKeyboardButton("🔓 Деобфусцировать файл",  callback_data="deobf_run"))
+    k.add(telebot.types.InlineKeyboardButton("◀ Назад",                  callback_data="back_main"))
     return k
 
 class FMsg:
     def __init__(self, call, text=""):
-        _cid=call.message.chat.id
-        self.chat=type("C",(),{"id":_cid})()
-        self.message=type("M",(),{"chat":self.chat,"message_id":call.message.message_id})()
-        self.from_user=type("U",(),{
-            "id":call.from_user.id,
-            "first_name":call.from_user.first_name or "User",
-            "username":getattr(call.from_user,"username",None),
+        _cid = call.message.chat.id
+        self.chat = type("C", (), {"id": _cid})()
+        self.message = type("M", (), {"chat": self.chat, "message_id": call.message.message_id})()
+        self.from_user = type("U", (), {
+            "id": call.from_user.id,
+            "first_name": call.from_user.first_name or "User",
+            "username": getattr(call.from_user, "username", None),
         })()
-        self.text=text
+        self.text = text
 
 # ═══════════════════════════════════════
-#               /start
+#               /start  (FIX!)
 # ═══════════════════════════════════════
 @bot.message_handler(commands=["start"])
 def cmd_start(msg):
-    uid=msg.from_user.id; name=msg.from_user.first_name or "Гость"
+    uid  = int(msg.from_user.id)
+    name = msg.from_user.first_name or "анон"
     print(f"[start] uid={uid} admin={is_admin(uid)} allowed={is_allowed(uid)}")
 
+    # FIX: Сразу добавляем админа если ещё нет
     if is_admin(uid):
-        key=str(uid)
+        key = str(uid)
         if key not in allowed_users:
-            allowed_users[key]={"username":getattr(msg.from_user,"username",""),
-                                "first_name":name,"added":ts(),"uses":0}
+            allowed_users[key] = {
+                "username":   getattr(msg.from_user, "username", "") or "",
+                "first_name": name,
+                "added":      ts(),
+                "uses":       0
+            }
             save_users()
+            print(f"[start] Добавлен админ {uid}")
 
     if not is_allowed(uid):
-        _send(msg.chat.id, "🔒 Доступ закрыт\n\nБот работает только по приглашению.\nОбратись к администратору.")
+        _send(msg.chat.id,
+            f"{ASTOLFO_ART}\n\n"
+            "🔒 Привет! Доступ закрыт~\n\n"
+            "Бот работает только по приглашению.\n"
+            "Обратись к администратору 💕")
         return
 
-    key=str(uid)
+    # Обновляем счётчик использований
+    key = str(uid)
     if key in allowed_users:
-        allowed_users[key]["uses"]=allowed_users[key].get("uses",0)+1
+        allowed_users[key]["uses"] = allowed_users[key].get("uses", 0) + 1
         save_users()
 
-    u=get_user(uid)
-    total=sum(len(cache[t]) for t in ["socks5","socks4","http"])
-    fast=len(cache["top_fast"])
+    u     = get_user(uid)
+    total = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
+    fast  = len(cache["top_fast"])
 
-    conn=("🟢 Подключён — "+u["proxy"]["host"]+" ("+u["proxy"]["type"].upper()+")"
-          if u["connected"] and u["proxy"] else "🔴 Не подключён")
-    adm="  👑 Администратор" if is_admin(uid) else ""
+    if u["connected"] and u["proxy"]:
+        conn_line = f"🟢 Подключён — {u['proxy']['host']} ({u['proxy']['type'].upper()})"
+    else:
+        conn_line = "🔴 Не подключён"
 
-    text=(
-        f"👋 Привет, {name}!{adm}\n\n"
-        f"🛡 Togaff VPN · Ultimate Edition\n"
+    adm_badge = "  👑 Администратор" if is_admin(uid) else ""
+
+    text = (
+        f"{ASTOLFO_ART}\n\n"
+        f"🌸 Привет, {name}!{adm_badge}\n\n"
+        f"🛡 Togaff VPN · Astolfo Ultimate Edition\n"
         f"──────────────────────\n"
-        f"{conn}\n\n"
+        f"{conn_line}\n\n"
         f"📦 Прокси в базе:   {total}\n"
         f"⚡ Лучших в пуле:   {fast}\n"
-        f"🔒 SOCKS5 · SOCKS4 · HTTP\n\n"
+        f"🔒 SOCKS5 · SOCKS4 · HTTP · Деобфускатор\n\n"
         f"──────────────────────\n"
-        f"Команды:\n"
-        f"/connect       авто-подключение\n"
-        f"/connect s5    только SOCKS5\n"
-        f"/connect s4    только SOCKS4\n"
-        f"/connect http  только HTTP\n"
-        f"/disconnect    отключиться\n"
-        f"/rotate        сменить IP\n"
-        f"/pick          выбрать прокси вручную\n"
-        f"/scan          найти быстрые серверы\n"
-        f"/status        текущий статус\n"
-        f"/ip            мой IP\n"
-        f"/generate      конфиг прокси\n"
-        f"/proxies       список серверов\n"
-        f"/refresh       обновить базу\n"
+        f"📋 Команды:\n"
+        f"/connect        авто-подключение\n"
+        f"/connect s5     только SOCKS5\n"
+        f"/connect s4     только SOCKS4\n"
+        f"/connect http   только HTTP\n"
+        f"/disconnect     отключиться\n"
+        f"/rotate         сменить IP\n"
+        f"/pick           выбрать прокси вручную\n"
+        f"/scan           найти быстрые серверы\n"
+        f"/status         текущий статус\n"
+        f"/ip             мой IP\n"
+        f"/generate       конфиг прокси\n"
+        f"/proxies        список серверов\n"
+        f"/refresh        обновить базу\n"
+        f"/deobf          деобфускатор кода\n"
     )
-    if is_admin(uid): text+=f"/admin         панель администратора\n"
 
-    try:
-        with open(WELCOME_PHOTO,"rb") as f:
-            bot.send_photo(msg.chat.id, f)
-    except Exception as e:
-        print(f"[start] фото: {e}")
+    if is_admin(uid):
+        text += f"/admin          панель администратора\n"
+
+    # Отправляем фото (если есть), потом меню
+    if os.path.exists(WELCOME_PHOTO):
+        try:
+            with open(WELCOME_PHOTO, "rb") as f:
+                bot.send_photo(msg.chat.id, f)
+        except Exception as e:
+            print(f"[start] фото ошибка: {e}")
 
     _send(msg.chat.id, text, kb_main(u["connected"]))
+
+# ═══════════════════════════════════════
+#       /deobf — деобфускатор
+# ═══════════════════════════════════════
+@bot.message_handler(commands=["deobf"])
+@access_required
+def cmd_deobf(msg):
+    _send(msg.chat.id,
+        f"🔓 Деобфускатор кода\n\n"
+        f"Поддерживаемые методы:\n"
+        f"• base64 / base32 / base16\n"
+        f"• zlib / gzip / lzma\n"
+        f"• base64+zlib / base64+gzip / base64+lzma\n"
+        f"• base32+zlib / base32+gzip / base32+lzma\n"
+        f"• base16+zlib / base16+gzip / base16+lzma\n"
+        f"• Rendy obf (marshal+gzip+lzma+zlib+base64)\n\n"
+        f"Выбери действие:",
+        kb_deobf())
+
+@bot.message_handler(commands=["deobf_send"])
+@access_required
+def cmd_deobf_send(msg):
+    uid = msg.from_user.id
+    _deobf_state[uid] = "waiting"
+    _send(msg.chat.id,
+        "📎 Отправь .py файл для деобфускации\n\n"
+        "Или напиши /cancel для отмены")
+
+# ═══════════════════════════════════════
+#   Обработка документов (.py файлов)
+# ═══════════════════════════════════════
+@bot.message_handler(content_types=["document"])
+@access_required
+def handle_document(msg):
+    uid = msg.from_user.id
+
+    # Если не в режиме деобфускатора — просто игнор
+    if _deobf_state.get(uid) != "waiting":
+        _send(msg.chat.id, "💕 Для деобфускации напиши /deobf")
+        return
+
+    doc = msg.document
+    if not doc.file_name.endswith(".py"):
+        _send(msg.chat.id, "⚠️ Только .py файлы поддерживаются!")
+        return
+
+    _deobf_state.pop(uid, None)
+    wait = _send(msg.chat.id, "🔍 Анализирую файл...")
+    if not wait:
+        return
+
+    def do():
+        try:
+            file_info = bot.get_file(doc.file_id)
+            downloaded = bot.download_file(file_info.file_path)
+            code = downloaded.decode("utf-8", errors="replace")
+
+            method = detect_obfuscation(code)
+            if not method:
+                _edit(msg.chat.id, wait.message_id,
+                    "🌸 Анализ завершён\n\n"
+                    "❓ Известная обфускация не обнаружена\n\n"
+                    "Файл может быть чистым или использует нестандартный метод.")
+                return
+
+            _edit(msg.chat.id, wait.message_id,
+                f"🔍 Обнаружена обфускация: {method}\n\n"
+                f"⏳ Декодирую...")
+
+            result, info = deobfuscate_code(code)
+
+            if result:
+                # Сохраняем и отправляем файл
+                out_name = f"decoded_{doc.file_name}"
+                out_path = f"/tmp/{out_name}"
+                with open(out_path, "w", encoding="utf-8") as f:
+                    f.write(result)
+
+                _edit(msg.chat.id, wait.message_id,
+                    f"✅ Деобфускация успешна!\n\n"
+                    f"🔓 Метод: {info}\n"
+                    f"📄 Файл: {out_name}\n\n"
+                    f"Отправляю результат...")
+
+                with open(out_path, "rb") as f:
+                    bot.send_document(msg.chat.id, f, visible_file_name=out_name,
+                        caption=f"🌸 Decoded by Togaff VPN Deobfuscator\nМетод: {info}")
+                os.remove(out_path)
+            else:
+                _edit(msg.chat.id, wait.message_id,
+                    f"❌ Не удалось деобфусцировать\n\n{info}")
+
+        except Exception as e:
+            _edit(msg.chat.id, wait.message_id, f"❌ Ошибка: {e}")
+
+    threading.Thread(target=do, daemon=True).start()
 
 # ═══════════════════════════════════════
 #         /pick — ручной выбор прокси
@@ -579,20 +937,22 @@ def cmd_start(msg):
 @bot.message_handler(commands=["pick"])
 @access_required
 def cmd_pick(msg):
-    fast=cache["top_fast"]
+    fast = cache["top_fast"]
     if not fast:
         _send(msg.chat.id,
-            "⚠️ Пул пуст\n\nСначала запусти /scan чтобы найти серверы,\nзатем вернись сюда.")
+            "⚠️ Пул пуст\n\n"
+            "Сначала запусти /scan чтобы найти серверы~")
         return
-    text=f"🗂 Выбери прокси из топ-{len(fast)}\n\nОтсортированы по скорости (мс):"
-    _send(msg.chat.id, text, kb_proxy_list(fast, page=0))
+    _send(msg.chat.id,
+          f"🗂 Выбери прокси из топ-{len(fast)}\n\nОтсортированы по скорости:",
+          kb_proxy_list(fast, page=0))
 
 # ═══════════════════════════════════════
 #              /admin
 # ═══════════════════════════════════════
 def _admin_text():
-    tot=sum(len(cache[t]) for t in ["socks5","socks4","http"])
-    online=sum(1 for u in users.values() if u.get("connected"))
+    tot    = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
+    online = sum(1 for u in users.values() if u.get("connected"))
     return (
         f"👑 Панель администратора\n\n"
         f"──────────────────────\n"
@@ -603,88 +963,140 @@ def _admin_text():
         f"📦 База прокси:    {tot}\n"
         f"⚡ Смарт-пул:      {len(cache['top_fast'])}\n"
         f"──────────────────────\n"
-        f"Выбери действие:"
+        f"Выбери действие~"
     )
 
 @bot.message_handler(commands=["admin"])
 def cmd_admin(msg):
     if not is_admin(msg.from_user.id):
-        _send(msg.chat.id,"🚫 Нет доступа"); return
+        _send(msg.chat.id, "🚫 Нет доступа~")
+        return
     _send(msg.chat.id, _admin_text(), kb_admin())
 
 @bot.message_handler(commands=["add"])
 def cmd_add(msg):
-    if not is_admin(msg.from_user.id): return
-    parts=msg.text.strip().split()
-    if len(parts)<2:
-        _send(msg.chat.id,"Использование: /add <user_id> [Имя]"); return
-    try: target=int(parts[1])
-    except: _send(msg.chat.id,"❌ Неверный ID"); return
+    if not is_admin(msg.from_user.id):
+        return
+    parts = msg.text.strip().split()
+    if len(parts) < 2:
+        _send(msg.chat.id, "Использование: /add <user_id> [Имя]")
+        return
+    try:
+        target = int(parts[1])
+    except:
+        _send(msg.chat.id, "❌ Неверный ID")
+        return
     banned_users.discard(target)
-    name=" ".join(parts[2:]) if len(parts)>2 else f"User {target}"
-    allowed_users[str(target)]={"username":"","first_name":name,"added":ts(),"uses":0,"added_by":msg.from_user.id}
+    banned_users.discard(str(target))
+    name = " ".join(parts[2:]) if len(parts) > 2 else f"User {target}"
+    allowed_users[str(target)] = {
+        "username": "", "first_name": name,
+        "added": ts(), "uses": 0, "added_by": msg.from_user.id
+    }
     save_users()
-    _send(msg.chat.id,f"✅ Добавлен\nID: {target}\nИмя: {name}")
-    try: bot.send_message(target,"✅ Доступ открыт!\n\nТебя добавили в Togaff VPN.\nНапиши /start")
-    except: pass
+    _send(msg.chat.id, f"✅ Добавлен\nID: {target}\nИмя: {name} 🌸")
+    try:
+        bot.send_message(target,
+            "🌸 Привет! Тебя добавили в Togaff VPN!\n\n"
+            "Напиши /start чтобы начать~ 💕")
+    except:
+        pass
 
 @bot.message_handler(commands=["remove"])
 def cmd_remove(msg):
-    if not is_admin(msg.from_user.id): return
-    parts=msg.text.strip().split()
-    if len(parts)<2: _send(msg.chat.id,"/remove <user_id>"); return
-    try: target=int(parts[1])
-    except: _send(msg.chat.id,"❌ Неверный ID"); return
-    key=str(target)
-    if key in allowed_users: del allowed_users[key]; save_users(); _send(msg.chat.id,f"✅ Удалён {target}")
-    else: _send(msg.chat.id,f"Не найден {target}")
+    if not is_admin(msg.from_user.id):
+        return
+    parts = msg.text.strip().split()
+    if len(parts) < 2:
+        _send(msg.chat.id, "/remove <user_id>")
+        return
+    try:
+        target = int(parts[1])
+    except:
+        _send(msg.chat.id, "❌ Неверный ID")
+        return
+    key = str(target)
+    if key in allowed_users:
+        del allowed_users[key]
+        save_users()
+        _send(msg.chat.id, f"✅ Удалён {target}")
+    else:
+        _send(msg.chat.id, f"Не найден {target}")
 
 @bot.message_handler(commands=["ban"])
 def cmd_ban(msg):
-    if not is_admin(msg.from_user.id): return
-    parts=msg.text.strip().split()
-    if len(parts)<2: _send(msg.chat.id,"/ban <user_id>"); return
-    try: target=int(parts[1])
-    except: _send(msg.chat.id,"❌ Неверный ID"); return
+    if not is_admin(msg.from_user.id):
+        return
+    parts = msg.text.strip().split()
+    if len(parts) < 2:
+        _send(msg.chat.id, "/ban <user_id>")
+        return
+    try:
+        target = int(parts[1])
+    except:
+        _send(msg.chat.id, "❌ Неверный ID")
+        return
     banned_users.add(target)
-    key=str(target)
-    if key in allowed_users: del allowed_users[key]
-    save_users(); _send(msg.chat.id,f"🚫 Забанен {target}")
+    key = str(target)
+    if key in allowed_users:
+        del allowed_users[key]
+    save_users()
+    _send(msg.chat.id, f"🚫 Забанен {target}")
 
 @bot.message_handler(commands=["unban"])
 def cmd_unban(msg):
-    if not is_admin(msg.from_user.id): return
-    parts=msg.text.strip().split()
-    if len(parts)<2: _send(msg.chat.id,"/unban <user_id>"); return
-    try: target=int(parts[1])
-    except: _send(msg.chat.id,"❌ Неверный ID"); return
-    banned_users.discard(target); save_users(); _send(msg.chat.id,f"✅ Разбанен {target}")
+    if not is_admin(msg.from_user.id):
+        return
+    parts = msg.text.strip().split()
+    if len(parts) < 2:
+        _send(msg.chat.id, "/unban <user_id>")
+        return
+    try:
+        target = int(parts[1])
+    except:
+        _send(msg.chat.id, "❌ Неверный ID")
+        return
+    banned_users.discard(target)
+    banned_users.discard(str(target))
+    save_users()
+    _send(msg.chat.id, f"✅ Разбанен {target} 🌸")
 
 @bot.message_handler(commands=["users"])
 def cmd_users(msg):
-    if not is_admin(msg.from_user.id): return
+    if not is_admin(msg.from_user.id):
+        return
     _send_users_list(msg.chat.id)
 
 def _send_users_list(chat_id, msg_id=None):
-    if not allowed_users: text="👥 Пользователи\n\nСписок пуст"
+    if not allowed_users:
+        text = "👥 Пользователи\n\nСписок пуст~"
     else:
-        lines=[f"👥 Пользователи ({len(allowed_users)})\n\n"]
-        for i,(uid,info) in enumerate(list(allowed_users.items())[:30],1):
-            uname=info.get("username",""); name=info.get("first_name","—")
-            added=info.get("added","—"); uses=info.get("uses",0)
-            online="🟢" if users.get(int(uid),{}).get("connected") else "⚪"
-            ustr=f"@{uname}" if uname else f"ID:{uid}"
+        lines = [f"👥 Пользователи ({len(allowed_users)})\n\n"]
+        for i, (uid_s, info) in enumerate(list(allowed_users.items())[:30], 1):
+            uname = info.get("username", "") or ""
+            name  = info.get("first_name", "—")
+            added = info.get("added", "—")
+            uses  = info.get("uses", 0)
+            try:
+                online = "🟢" if users.get(int(uid_s), {}).get("connected") else "⚪"
+            except:
+                online = "⚪"
+            ustr = f"@{uname}" if uname else f"ID:{uid_s}"
             lines.append(f"{online} {i}. {name} {ustr}\n   Добавлен: {added} · Сессий: {uses}\n\n")
-        if len(allowed_users)>30: lines.append(f"...и ещё {len(allowed_users)-30}")
-        text="".join(lines)
-    k=telebot.types.InlineKeyboardMarkup()
-    k.add(telebot.types.InlineKeyboardButton("◀ Назад",callback_data="adm_panel"))
+        if len(allowed_users) > 30:
+            lines.append(f"...и ещё {len(allowed_users)-30}")
+        text = "".join(lines)
+    k = telebot.types.InlineKeyboardMarkup()
+    k.add(telebot.types.InlineKeyboardButton("◀ Назад", callback_data="adm_panel"))
     if msg_id:
-        try: bot.edit_message_text(text,chat_id,msg_id,reply_markup=k); return
-        except: pass
-    _send(chat_id,text,k)
+        try:
+            bot.edit_message_text(text, chat_id, msg_id, reply_markup=k)
+            return
+        except:
+            pass
+    _send(chat_id, text, k)
 
-_broadcast_state={}
+_broadcast_state = {}
 
 # ═══════════════════════════════════════
 #               /scan
@@ -692,96 +1104,109 @@ _broadcast_state={}
 @bot.message_handler(commands=["scan"])
 @access_required
 def cmd_scan(msg):
-    wait=_send(msg.chat.id,"🔍 Сканирую серверы...\n\nЭтап 1/2: TCP-пинг\n"+lbar(0)+"  0/0")
-    if not wait: return
-    cid=msg.chat.id; mid=wait.message_id
-    upd=_updater(cid,mid)
+    wait = _send(msg.chat.id, "🔍 Сканирую серверы...\n\nЭтап 1/2: TCP-пинг\n" + lbar(0) + "  0/0")
+    if not wait:
+        return
+    cid = msg.chat.id
+    mid = wait.message_id
+    upd = _updater(cid, mid)
 
-    def tcp_cb(done,total):
+    def tcp_cb(done, total):
         upd(f"🔍 Сканирую серверы...\n\nЭтап 1/2: TCP-пинг\n{lbar(done,total)}  {done}/{total} хостов")
 
-    def http_cb(done,total):
+    def http_cb(done, total):
         upd(f"🔍 Сканирую серверы...\n\nЭтап 2/2: Проверка IP\n{lbar(done,total)}  {done}/{total} живых серверов")
 
     def do():
-        my_ip=get_my_ip() or ""
-        results=build_smart_pool(my_ip,sample=SCAN_SAMPLE,tcp_cb=tcp_cb,http_cb=http_cb)
+        my_ip = get_my_ip() or ""
+        results = build_smart_pool(my_ip, sample=SCAN_SAMPLE, tcp_cb=tcp_cb, http_cb=http_cb)
         if not results:
-            _edit(cid,mid,"❌ Серверы не найдены\n\nПопробуй /refresh и повтори /scan")
+            _edit(cid, mid,
+                "❌ Серверы не найдены\n\n"
+                "Попробуй /refresh и повтори /scan~")
             return
-        lines=[f"⚡ Смарт-пул готов — {len(results)} серверов\n\n"]
-        for i,r in enumerate(results[:7],1):
+        lines = [f"⚡ Смарт-пул готов — {len(results)} серверов 🌸\n\n"]
+        for i, r in enumerate(results[:7], 1):
             lines.append(
                 f"{i}. {proto_icon(r['type'])} {r['host']}:{r['port']}\n"
                 f"   {ping_bar(r['ping'])}  {r['ping']} ms\n\n"
             )
-        lines.append("Серверы используются автоматически при /connect\nДля ручного выбора: /pick")
-        _edit(cid,mid,"".join(lines),kb_main(get_user(msg.from_user.id)["connected"]))
+        lines.append("Используются автоматически при /connect\nДля ручного выбора: /pick")
+        _edit(cid, mid, "".join(lines), kb_main(get_user(msg.from_user.id)["connected"]))
 
-    threading.Thread(target=do,daemon=True).start()
+    threading.Thread(target=do, daemon=True).start()
 
 # ═══════════════════════════════════════
-#             /connect
+#             /connect  (FIX!)
 # ═══════════════════════════════════════
 @bot.message_handler(commands=["connect"])
 @access_required
 def cmd_connect(msg):
-    uid=msg.from_user.id; u=get_user(uid)
-    parts=(msg.text or "").strip().split()
-    raw=parts[1].lower() if len(parts)>1 else None
-    aliases={"s5":"socks5","socks5":"socks5","s4":"socks4","socks4":"socks4","http":"http","https":"http"}
-    pf=aliases.get(raw) if raw else None
+    uid   = int(msg.from_user.id)
+    u     = get_user(uid)
+    parts = (msg.text or "").strip().split()
+    raw   = parts[1].lower() if len(parts) > 1 else None
+    aliases = {"s5": "socks5", "socks5": "socks5", "s4": "socks4",
+                "socks4": "socks4", "http": "http", "https": "http"}
+    pf = aliases.get(raw) if raw else None
 
     if u["connected"]:
-        px=u["proxy"]
+        px = u["proxy"]
         _send(msg.chat.id,
-            f"✅ Уже подключён\n\n{proto_icon(px['type'])} {px['host']}:{px['port']}\n\n"
+            f"✅ Уже подключён~\n\n"
+            f"{proto_icon(px['type'])} {px['host']}:{px['port']}\n\n"
             f"• /rotate — сменить IP\n• /disconnect — отключиться",
             kb_main(True))
         return
 
-    wait=_send(msg.chat.id,"🔍 Определяю ваш IP...")
-    if not wait: return
-    cid=msg.chat.id; mid=wait.message_id
-    upd=_updater(cid,mid)
+    wait = _send(msg.chat.id, "🔍 Определяю твой IP...")
+    if not wait:
+        return
+    cid = msg.chat.id
+    mid = wait.message_id
+    upd = _updater(cid, mid)
 
     def do():
-        my_ip=get_my_ip() or "unknown"; u["ip_before"]=my_ip
-        label=pf.upper() if pf else "АВТО"
-        fast_n=len([p for p in cache["top_fast"] if not pf or p["type"]==pf])
+        my_ip = get_my_ip() or "unknown"
+        u["ip_before"] = my_ip
+        label   = pf.upper() if pf else "АВТО"
+        fast_n  = len([p for p in cache["top_fast"] if not pf or p["type"] == pf])
 
         if fast_n:
-            upd(f"🔄 Подключаюсь [{label}]\n\nВаш IP: {my_ip}\n⚡ Проверяю {fast_n} быстрых серверов...")
+            upd(f"🔄 Подключаюсь [{label}]\n\nТвой IP: {my_ip}\n⚡ Проверяю {fast_n} быстрых серверов...")
         else:
-            upd(f"🔄 Подключаюсь [{label}]\n\nВаш IP: {my_ip}\n🔍 Полный поиск (запусти /scan для ускорения)...")
+            upd(f"🔄 Подключаюсь [{label}]\n\nТвой IP: {my_ip}\n🔍 Полный поиск (запусти /scan для ускорения)...")
 
-        n_info={"n":0}
-        def on_try(n,pt,h,p):
-            n_info["n"]=n
-            upd(f"🔄 Подключаюсь [{label}]\n\nВаш IP: {my_ip}\n{proto_icon(pt)} Тест: {h}:{p}\n{lbar(min(n,200),200)}  попытка {n}")
+        n_info = {"n": 0}
 
-        res=find_best_proxy(my_ip,ptype_filter=pf,on_try=on_try)
+        def on_try(n, pt, h, p):
+            n_info["n"] = n
+            upd(f"🔄 Подключаюсь [{label}]\n\nТвой IP: {my_ip}\n"
+                f"{proto_icon(pt)} Тест: {h}:{p}\n"
+                f"{lbar(min(n,200),200)}  попытка {n}")
+
+        res = find_best_proxy(my_ip, ptype_filter=pf, on_try=on_try)
 
         if res:
-            u.update(connected=True,proxy=res,connect_time=time.time(),ip_after=res["new_ip"])
-            u["sessions"]=u.get("sessions",0)+1
+            u.update(connected=True, proxy=res, connect_time=time.time(), ip_after=res["new_ip"])
+            u["sessions"] = u.get("sessions", 0) + 1
             smart_pool_refresh_bg(my_ip)
-            _edit(cid,mid,
-                f"✅ Подключение установлено\n\n"
+            _edit(cid, mid,
+                f"✅ Подключение установлено! 🌸\n\n"
                 f"──────────────────────\n"
                 f"{proto_icon(res['type'])} Протокол:  {res['type'].upper()}\n"
                 f"🖥 Сервер:    {res['host']}:{res['port']}\n"
                 f"──────────────────────\n"
-                f"📶 Качество соединения:\n"
+                f"📶 Качество:\n"
                 f"   {ping_bar(res['ping'])}  {res['ping']} ms\n"
                 f"──────────────────────\n"
-                f"📍 Ваш IP до:   {my_ip}\n"
-                f"🌍 Ваш IP сейчас: {res['new_ip']}\n"
+                f"📍 IP до:      {my_ip}\n"
+                f"🌍 IP сейчас:  {res['new_ip']}\n"
                 f"──────────────────────\n"
-                f"🔒 Защита активна",
+                f"🔒 Защита активна~ 💕",
                 kb_main(True))
         else:
-            _edit(cid,mid,
+            _edit(cid, mid,
                 f"❌ Сервер не найден\n\n"
                 f"Проверено: {n_info['n']} серверов\n\n"
                 f"Попробуй:\n"
@@ -790,7 +1215,7 @@ def cmd_connect(msg):
                 f"• /connect http — только HTTP",
                 kb_main(False))
 
-    threading.Thread(target=do,daemon=True).start()
+    threading.Thread(target=do, daemon=True).start()
 
 # ═══════════════════════════════════════
 #           /disconnect
@@ -798,12 +1223,15 @@ def cmd_connect(msg):
 @bot.message_handler(commands=["disconnect"])
 @access_required
 def cmd_disconnect(msg):
-    u=get_user(msg.from_user.id)
+    u = get_user(msg.from_user.id)
     if not u["connected"]:
-        _send(msg.chat.id,"ℹ️ VPN не подключён",kb_main(False)); return
-    sess=fmt_time(time.time()-u["connect_time"]) if u["connect_time"] else "—"
-    px=u["proxy"]; ib=u.get("ip_before","—"); ia=u.get("ip_after","—")
-    u.update(connected=False,proxy=None,connect_time=None)
+        _send(msg.chat.id, "ℹ️ VPN не подключён~", kb_main(False))
+        return
+    sess = fmt_time(time.time() - u["connect_time"]) if u["connect_time"] else "—"
+    px   = u["proxy"]
+    ib   = u.get("ip_before", "—")
+    ia   = u.get("ip_after", "—")
+    u.update(connected=False, proxy=None, connect_time=None)
     _send(msg.chat.id,
         f"🔴 Сессия завершена\n\n"
         f"──────────────────────\n"
@@ -812,7 +1240,8 @@ def cmd_disconnect(msg):
         f"──────────────────────\n"
         f"📍 Реальный IP:  {ib}\n"
         f"🌍 Был IP VPN:   {ia}\n"
-        f"──────────────────────",
+        f"──────────────────────\n"
+        f"Пока~ 🌸",
         kb_main(False))
 
 # ═══════════════════════════════════════
@@ -821,29 +1250,33 @@ def cmd_disconnect(msg):
 @bot.message_handler(commands=["rotate"])
 @access_required
 def cmd_rotate(msg):
-    u=get_user(msg.from_user.id)
+    u = get_user(msg.from_user.id)
     if not u["connected"]:
-        _send(msg.chat.id,"ℹ️ Сначала /connect"); return
-    wait=_send(msg.chat.id,"🔄 Меняю IP...")
-    if not wait: return
-    cid=msg.chat.id; mid=wait.message_id
-    upd=_updater(cid,mid)
+        _send(msg.chat.id, "ℹ️ Сначала /connect~")
+        return
+    wait = _send(msg.chat.id, "🔄 Меняю IP...")
+    if not wait:
+        return
+    cid = msg.chat.id
+    mid = wait.message_id
+    upd = _updater(cid, mid)
 
     def do():
-        my_ip=u.get("ip_before") or get_my_ip() or "unknown"
-        excl=u["proxy"]["host"] if u["proxy"] else None
-        old_ip=u.get("ip_after","—"); n_info={"n":0}
+        my_ip  = u.get("ip_before") or get_my_ip() or "unknown"
+        excl   = u["proxy"]["host"] if u["proxy"] else None
+        old_ip = u.get("ip_after", "—")
+        n_info = {"n": 0}
 
-        def on_try(n,pt,h,p):
-            n_info["n"]=n
+        def on_try(n, pt, h, p):
+            n_info["n"] = n
             upd(f"🔄 Меняю IP...\n\n{proto_icon(pt)} {h}:{p}\n{lbar(min(n,200),200)}  попытка {n}")
 
-        res=find_best_proxy(my_ip,exclude=excl,on_try=on_try)
+        res = find_best_proxy(my_ip, exclude=excl, on_try=on_try)
         if res:
-            u.update(proxy=res,connect_time=time.time(),ip_after=res["new_ip"])
-            u["total_rotates"]=u.get("total_rotates",0)+1
-            _edit(cid,mid,
-                f"✅ IP изменён\n\n"
+            u.update(proxy=res, connect_time=time.time(), ip_after=res["new_ip"])
+            u["total_rotates"] = u.get("total_rotates", 0) + 1
+            _edit(cid, mid,
+                f"✅ IP изменён! 🌸\n\n"
                 f"──────────────────────\n"
                 f"{proto_icon(res['type'])} {res['host']}:{res['port']}\n"
                 f"──────────────────────\n"
@@ -853,9 +1286,9 @@ def cmd_rotate(msg):
                 f"🌍 Новый:   {res['new_ip']}",
                 kb_main(True))
         else:
-            _edit(cid,mid,"❌ Нет доступных серверов\n\nПопробуй /scan",kb_main(True))
+            _edit(cid, mid, "❌ Нет доступных серверов\n\nПопробуй /scan~", kb_main(True))
 
-    threading.Thread(target=do,daemon=True).start()
+    threading.Thread(target=do, daemon=True).start()
 
 # ═══════════════════════════════════════
 #              /status
@@ -863,31 +1296,31 @@ def cmd_rotate(msg):
 @bot.message_handler(commands=["status"])
 @access_required
 def cmd_status(msg):
-    u=get_user(msg.from_user.id)
-    tot=sum(len(cache[t]) for t in ["socks5","socks4","http"])
-    fast=len(cache["top_fast"])
+    u    = get_user(msg.from_user.id)
+    tot  = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
+    fast = len(cache["top_fast"])
 
     if u["connected"] and u["proxy"]:
-        px=u["proxy"]
-        sess=fmt_time(time.time()-u["connect_time"]) if u["connect_time"] else "—"
-
-        # Живой пинг в отдельном потоке чтобы не блокировать
-        wait=_send(msg.chat.id,"📊 Получаю статус...")
-        if not wait: return
+        px   = u["proxy"]
+        sess = fmt_time(time.time() - u["connect_time"]) if u["connect_time"] else "—"
+        wait = _send(msg.chat.id, "📊 Получаю статус...")
+        if not wait:
+            return
 
         def do():
-            ms=tcp_ping(px["host"],px["port"],timeout=2.5)
-            anon=("Высокая (SOCKS5)" if px["type"]=="socks5"
-                  else "Средняя (SOCKS4)" if px["type"]=="socks4" else "Базовая (HTTP)")
-            ping_str=f"{ms} ms" if ms else "сервер недоступен"
-            _edit(msg.chat.id,wait.message_id,
-                f"📊 Статус VPN\n\n"
+            ms   = tcp_ping(px["host"], px["port"], timeout=2.5)
+            anon = ("Высокая (SOCKS5)" if px["type"] == "socks5"
+                    else "Средняя (SOCKS4)" if px["type"] == "socks4"
+                    else "Базовая (HTTP)")
+            ping_str = f"{ms} ms" if ms else "сервер недоступен"
+            _edit(msg.chat.id, wait.message_id,
+                f"📊 Статус VPN 🌸\n\n"
                 f"──────────────────────\n"
                 f"🟢 Статус:     АКТИВЕН\n"
                 f"{proto_icon(px['type'])} Протокол:  {px['type'].upper()}\n"
                 f"🖥 Сервер:     {px['host']}:{px['port']}\n"
                 f"──────────────────────\n"
-                f"📶 Качество соединения:\n"
+                f"📶 Качество:\n"
                 f"   {ping_bar(ms)}  {ping_str}\n"
                 f"──────────────────────\n"
                 f"⏱ Сессия:      {sess}\n"
@@ -896,12 +1329,13 @@ def cmd_status(msg):
                 f"🌍 IP сейчас:  {u.get('ip_after','—')}\n"
                 f"──────────────────────\n"
                 f"🔐 Анонимность: {anon}\n"
-                f"🔒 Защита:     активна\n"
+                f"🔒 Защита:     активна~\n"
                 f"──────────────────────\n"
                 f"📦 База:       {tot} прокси\n"
                 f"⚡ Пул:        {fast} быстрых",
                 kb_main(True))
-        threading.Thread(target=do,daemon=True).start()
+
+        threading.Thread(target=do, daemon=True).start()
     else:
         _send(msg.chat.id,
             f"📊 Статус VPN\n\n"
@@ -916,7 +1350,7 @@ def cmd_status(msg):
             f"──────────────────────\n"
             f"⚡ Смарт-пул:  {fast} серверов\n\n"
             f"/connect — подключиться\n"
-            f"/scan — найти лучшие серверы",
+            f"/scan — найти лучшие серверы~",
             kb_main(False))
 
 # ═══════════════════════════════════════
@@ -925,12 +1359,13 @@ def cmd_status(msg):
 @bot.message_handler(commands=["proxies"])
 @access_required
 def cmd_proxies(msg):
-    tot=sum(len(cache[t]) for t in ["socks5","socks4","http"])
-    fast=cache["top_fast"]
-    if tot==0:
-        _send(msg.chat.id,"📦 База пуста\n\nИспользуй /refresh"); return
+    tot  = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
+    fast = cache["top_fast"]
+    if tot == 0:
+        _send(msg.chat.id, "📦 База пуста\n\nИспользуй /refresh~")
+        return
 
-    lines=[f"🗂 Серверы Togaff VPN\n\n"]
+    lines = ["🗂 Серверы Togaff VPN 🌸\n\n"]
     if fast:
         lines.append(f"⚡ Быстрые серверы (топ {min(3,len(fast))}):\n\n")
         for r in fast[:3]:
@@ -938,13 +1373,14 @@ def cmd_proxies(msg):
                          f"  {ping_bar(r['ping'])}  {r['ping']} ms\n\n")
         lines.append("──────────────────────\n")
 
-    for pt in ["socks5","socks4","http"]:
+    for pt in ["socks5", "socks4", "http"]:
         lines.append(f"{proto_icon(pt)} {pt.upper()} — {len(cache[pt])} серверов\n")
-        for h,p in cache[pt][:3]: lines.append(f"   {h}:{p}\n")
+        for h, p in cache[pt][:3]:
+            lines.append(f"   {h}:{p}\n")
         lines.append("\n")
-    lines.append(f"Всего: {tot}  ·  /refresh для обновления\n/pick для ручного выбора")
+    lines.append(f"Всего: {tot}  ·  /refresh для обновления\n/pick для ручного выбора~")
 
-    _send(msg.chat.id,"".join(lines),kb_main(get_user(msg.from_user.id)["connected"]))
+    _send(msg.chat.id, "".join(lines), kb_main(get_user(msg.from_user.id)["connected"]))
 
 # ═══════════════════════════════════════
 #               /ip
@@ -952,24 +1388,29 @@ def cmd_proxies(msg):
 @bot.message_handler(commands=["ip"])
 @access_required
 def cmd_ip(msg):
-    u=get_user(msg.from_user.id)
-    wait=_send(msg.chat.id,"🔍 Определяю IP...")
-    if not wait: return
+    u    = get_user(msg.from_user.id)
+    wait = _send(msg.chat.id, "🔍 Определяю IP...")
+    if not wait:
+        return
 
     def do():
         if u["connected"] and u["proxy"]:
-            px=u["proxy"]; ip=get_ip_via(px["type"],px["host"],px["port"],timeout=9)
-            mode=f"{px['type'].upper()} прокси"; icon="🌍"
+            px   = u["proxy"]
+            ip   = get_ip_via(px["type"], px["host"], px["port"], timeout=9)
+            mode = f"{px['type'].upper()} прокси"
+            icon = "🌍"
         else:
-            ip=get_my_ip(timeout=7); mode="прямое соединение"; icon="📍"
-        _edit(msg.chat.id,wait.message_id,
-            f"{icon} Ваш IP-адрес\n\n"
+            ip   = get_my_ip(timeout=7)
+            mode = "прямое соединение"
+            icon = "📍"
+        _edit(msg.chat.id, wait.message_id,
+            f"{icon} Твой IP-адрес 🌸\n\n"
             f"──────────────────────\n"
             f"IP:    {ip or 'недоступен'}\n"
             f"Режим: {mode}\n"
             f"──────────────────────")
 
-    threading.Thread(target=do,daemon=True).start()
+    threading.Thread(target=do, daemon=True).start()
 
 # ═══════════════════════════════════════
 #            /refresh
@@ -977,24 +1418,26 @@ def cmd_ip(msg):
 @bot.message_handler(commands=["refresh"])
 @access_required
 def cmd_refresh(msg):
-    wait=_send(msg.chat.id,"🔄 Обновляю базу прокси...")
-    if not wait: return
+    wait = _send(msg.chat.id, "🔄 Обновляю базу прокси...")
+    if not wait:
+        return
 
     def do():
-        cache["updated"]=0; refresh_cache(force=True)
-        tot=sum(len(cache[t]) for t in ["socks5","socks4","http"])
-        _edit(msg.chat.id,wait.message_id,
-            f"✅ База обновлена\n\n"
+        cache["updated"] = 0
+        refresh_cache(force=True)
+        tot = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
+        _edit(msg.chat.id, wait.message_id,
+            f"✅ База обновлена! 🌸\n\n"
             f"──────────────────────\n"
             f"🔵 SOCKS5: {len(cache['socks5'])}\n"
             f"🟣 SOCKS4: {len(cache['socks4'])}\n"
             f"⚪ HTTP:   {len(cache['http'])}\n"
             f"──────────────────────\n"
             f"📦 Итого:  {tot}\n\n"
-            f"/scan — найти лучшие серверы",
+            f"/scan — найти лучшие серверы~",
             kb_main(get_user(msg.from_user.id)["connected"]))
 
-    threading.Thread(target=do,daemon=True).start()
+    threading.Thread(target=do, daemon=True).start()
 
 # ═══════════════════════════════════════
 #            /generate
@@ -1002,27 +1445,39 @@ def cmd_refresh(msg):
 @bot.message_handler(commands=["generate"])
 @access_required
 def cmd_generate(msg):
-    u=get_user(msg.from_user.id)
+    u = get_user(msg.from_user.id)
     if u["connected"] and u["proxy"]:
-        _send_config(msg.chat.id, None, u["proxy"]); return
-    wait=_send(msg.chat.id,"🔧 Генерирую конфиг...")
-    if not wait: return
-    cid=msg.chat.id; mid=wait.message_id; upd=_updater(cid,mid)
+        _send_config(msg.chat.id, None, u["proxy"])
+        return
+    wait = _send(msg.chat.id, "🔧 Генерирую конфиг...")
+    if not wait:
+        return
+    cid = msg.chat.id
+    mid = wait.message_id
+    upd = _updater(cid, mid)
+
     def do():
-        my_ip=get_my_ip() or "0.0.0.0"; n_info={"n":0}
-        def on_try(n,pt,h,p):
-            n_info["n"]=n
+        my_ip  = get_my_ip() or "0.0.0.0"
+        n_info = {"n": 0}
+
+        def on_try(n, pt, h, p):
+            n_info["n"] = n
             upd(f"🔧 Генератор конфигов\n\n{proto_icon(pt)} {h}:{p}\n{lbar(min(n,60),60)}  попытка {n}")
-        res=find_best_proxy(my_ip,on_try=on_try)
-        if res: _send_config(cid,mid,res)
-        else: _edit(cid,mid,"❌ Нет рабочего прокси\n\nПопробуй /scan")
-    threading.Thread(target=do,daemon=True).start()
+
+        res = find_best_proxy(my_ip, on_try=on_try)
+        if res:
+            _send_config(cid, mid, res)
+        else:
+            _edit(cid, mid, "❌ Нет рабочего прокси\n\nПопробуй /scan~")
+
+    threading.Thread(target=do, daemon=True).start()
 
 def _send_config(chat_id, msg_id, proxy):
-    h,p,pt=proxy["host"],proxy["port"],proxy["type"]
-    ms=proxy["ping"]; pu=_proxy_url(pt,h,p)
-    text=(
-        f"📋 Конфиг прокси\n\n"
+    h, p, pt = proxy["host"], proxy["port"], proxy["type"]
+    ms = proxy["ping"]
+    pu = _proxy_url(pt, h, p)
+    text = (
+        f"📋 Конфиг прокси 🌸\n\n"
         f"──────────────────────\n"
         f"{proto_icon(pt)} {h}:{p}  ·  {pt.upper()}\n"
         f"📶 {ping_bar(ms)}  {ms} ms\n"
@@ -1034,203 +1489,305 @@ def _send_config(chat_id, msg_id, proxy):
         f"RAW:\n{h}:{p}"
     )
     if msg_id:
-        try: bot.edit_message_text(text,chat_id,msg_id,reply_markup=kb_generate()); return
-        except: pass
-    _send(chat_id,text,kb_generate())
+        try:
+            bot.edit_message_text(text, chat_id, msg_id, reply_markup=kb_generate())
+            return
+        except:
+            pass
+    _send(chat_id, text, kb_generate())
 
 # ═══════════════════════════════════════
 #            CALLBACKS
 # ═══════════════════════════════════════
 @bot.callback_query_handler(func=lambda c: True)
 def on_callback(call):
-    uid=call.from_user.id; d=call.data
-    cid=call.message.chat.id; mid=call.message.message_id
+    uid = int(call.from_user.id)
+    d   = call.data
+    cid = call.message.chat.id
+    mid = call.message.message_id
+
+    # ─ Деобфускатор ─────────────────────
+    if d == "deobf_menu":
+        if not is_allowed(uid):
+            bot.answer_callback_query(call.id, "🔒")
+            return
+        bot.answer_callback_query(call.id)
+        try:
+            bot.edit_message_text(
+                "🔓 Деобфускатор кода 🌸\n\n"
+                "Поддерживаемые методы:\n"
+                "• base64/32/16 · zlib · gzip · lzma\n"
+                "• Комбо: base+zlib/gzip/lzma\n"
+                "• Rendy obf (marshal+gzip+lzma+zlib+base64)\n\n"
+                "Выбери действие:",
+                cid, mid, reply_markup=kb_deobf())
+        except:
+            _send(cid, "🔓 Деобфускатор", kb_deobf())
+        return
+
+    if d == "deobf_detect":
+        if not is_allowed(uid):
+            bot.answer_callback_query(call.id, "🔒")
+            return
+        bot.answer_callback_query(call.id)
+        _deobf_state[uid] = "waiting_detect"
+        _edit(cid, mid,
+            "🔍 Отправь .py файл и я определю тип обфускации~\n\n"
+            "(/cancel для отмены)")
+        return
+
+    if d == "deobf_run":
+        if not is_allowed(uid):
+            bot.answer_callback_query(call.id, "🔒")
+            return
+        bot.answer_callback_query(call.id)
+        _deobf_state[uid] = "waiting"
+        _edit(cid, mid,
+            "📎 Отправь .py файл для деобфускации~\n\n"
+            "(/cancel для отмены)")
+        return
 
     # ─ Ручной выбор прокси ──────────────
     if d.startswith("pick_"):
-        if not is_allowed(uid): bot.answer_callback_query(call.id,"🔒"); return
-        idx=int(d.split("_")[1]); fast=cache["top_fast"]
-        if idx>=len(fast): bot.answer_callback_query(call.id,"⚠️ Устаревший список"); return
-        px=fast[idx]; bot.answer_callback_query(call.id,"⚡ Подключаюсь...")
-        u=get_user(uid)
-        if u["connected"]:
-            old_ip=u.get("ip_after","—")
-        else:
-            old_ip=None
-        wait=_send(cid,f"🔄 Подключаюсь к выбранному серверу...\n\n{proto_icon(px['type'])} {px['host']}:{px['port']}")
-        if not wait: return
+        if not is_allowed(uid):
+            bot.answer_callback_query(call.id, "🔒")
+            return
+        idx  = int(d.split("_")[1])
+        fast = cache["top_fast"]
+        if idx >= len(fast):
+            bot.answer_callback_query(call.id, "⚠️ Устаревший список")
+            return
+        px = fast[idx]
+        bot.answer_callback_query(call.id, "⚡ Подключаюсь...")
+        u = get_user(uid)
+        old_ip = u.get("ip_after") if u["connected"] else None
+        wait = _send(cid,
+            f"🔄 Подключаюсь к выбранному серверу...\n\n"
+            f"{proto_icon(px['type'])} {px['host']}:{px['port']}")
+        if not wait:
+            return
+
         def do():
-            my_ip=get_my_ip() or "unknown"
-            if not old_ip: u["ip_before"]=my_ip
-            res=verify_proxy(px["type"],px["host"],px["port"],my_ip,tcp_t=2,ip_t=9)
+            my_ip = get_my_ip() or "unknown"
+            if not old_ip:
+                u["ip_before"] = my_ip
+            res = verify_proxy(px["type"], px["host"], px["port"], my_ip, tcp_t=2, ip_t=9)
             if res:
-                u.update(connected=True,proxy=res,connect_time=time.time(),ip_after=res["new_ip"])
-                u["sessions"]=u.get("sessions",0)+1
-                _edit(cid,wait.message_id,
-                    f"✅ Подключён к выбранному серверу\n\n"
+                u.update(connected=True, proxy=res, connect_time=time.time(), ip_after=res["new_ip"])
+                u["sessions"] = u.get("sessions", 0) + 1
+                _edit(cid, wait.message_id,
+                    f"✅ Подключён! 🌸\n\n"
                     f"──────────────────────\n"
                     f"{proto_icon(res['type'])} {res['host']}:{res['port']}\n"
                     f"──────────────────────\n"
                     f"📶 {ping_bar(res['ping'])}  {res['ping']} ms\n"
                     f"──────────────────────\n"
                     f"📍 IP до:     {my_ip}\n"
-                    f"🌍 IP сейчас: {res['new_ip']}",
+                    f"🌍 IP сейчас: {res['new_ip']} 💕",
                     kb_main(True))
             else:
-                _edit(cid,wait.message_id,
-                    f"❌ Сервер недоступен\n\n{px['host']}:{px['port']}\n\nВыбери другой или /connect",
-                    kb_proxy_list(fast,0))
-        threading.Thread(target=do,daemon=True).start()
+                _edit(cid, wait.message_id,
+                    f"❌ Сервер недоступен\n\n{px['host']}:{px['port']}\n\nВыбери другой~",
+                    kb_proxy_list(fast, 0))
+
+        threading.Thread(target=do, daemon=True).start()
         return
 
     if d.startswith("pxpage_"):
-        if not is_allowed(uid): bot.answer_callback_query(call.id,"🔒"); return
-        page=int(d.split("_")[1]); fast=cache["top_fast"]
+        if not is_allowed(uid):
+            bot.answer_callback_query(call.id, "🔒")
+            return
+        page = int(d.split("_")[1])
+        fast = cache["top_fast"]
         bot.answer_callback_query(call.id)
-        try: bot.edit_message_reply_markup(cid,mid,reply_markup=kb_proxy_list(fast,page))
-        except: pass
+        try:
+            bot.edit_message_reply_markup(cid, mid, reply_markup=kb_proxy_list(fast, page))
+        except:
+            pass
         return
 
-    # ─ Без проверки доступа ─────────────
-    if d=="back_main":
+    if d == "back_main":
         bot.answer_callback_query(call.id)
-        cmd_start(FMsg(call,"/start")); return
+        cmd_start(FMsg(call, "/start"))
+        return
 
-    if d=="adm_panel":
-        if not is_admin(uid): bot.answer_callback_query(call.id,"🚫"); return
+    if d == "adm_panel":
+        if not is_admin(uid):
+            bot.answer_callback_query(call.id, "🚫")
+            return
         bot.answer_callback_query(call.id)
-        try: bot.edit_message_text(_admin_text(),cid,mid,reply_markup=kb_admin())
-        except: _send(cid,_admin_text(),kb_admin())
+        try:
+            bot.edit_message_text(_admin_text(), cid, mid, reply_markup=kb_admin())
+        except:
+            _send(cid, _admin_text(), kb_admin())
         return
 
     # ─ Кнопки админа ────────────────────
     if d.startswith("adm_") or d.startswith("ban_") or d.startswith("del_"):
-        if not is_admin(uid): bot.answer_callback_query(call.id,"🚫"); return
-        if d=="adm_users":
+        if not is_admin(uid):
+            bot.answer_callback_query(call.id, "🚫")
+            return
+        if d == "adm_users":
             bot.answer_callback_query(call.id)
-            _send_users_list(cid,mid)
-        elif d=="adm_banned":
+            _send_users_list(cid, mid)
+        elif d == "adm_banned":
             bot.answer_callback_query(call.id)
-            text=(f"🚫 Бан-лист ({len(banned_users)})\n\n"+
-                  "\n".join(f"• {u}" for u in list(banned_users)[:30])
-                  if banned_users else "🚫 Бан-лист\n\nПуст")
-            k=telebot.types.InlineKeyboardMarkup()
-            k.add(telebot.types.InlineKeyboardButton("◀ Назад",callback_data="adm_panel"))
-            try: bot.edit_message_text(text,cid,mid,reply_markup=k)
-            except: _send(cid,text,k)
-        elif d=="adm_stats":
+            text = (f"🚫 Бан-лист ({len(banned_users)})\n\n" +
+                    "\n".join(f"• {u}" for u in list(banned_users)[:30])
+                    if banned_users else "🚫 Бан-лист\n\nПуст~")
+            k = telebot.types.InlineKeyboardMarkup()
+            k.add(telebot.types.InlineKeyboardButton("◀ Назад", callback_data="adm_panel"))
+            try:
+                bot.edit_message_text(text, cid, mid, reply_markup=k)
+            except:
+                _send(cid, text, k)
+        elif d == "adm_stats":
             bot.answer_callback_query(call.id)
-            online=sum(1 for u in users.values() if u.get("connected"))
-            tot=sum(len(cache[t]) for t in ["socks5","socks4","http"])
-            text=(f"📊 Статистика\n\n"
-                  f"👥 Пользователей: {len(allowed_users)}\n"
-                  f"🟢 Онлайн: {online}\n"
-                  f"🚫 В бане: {len(banned_users)}\n\n"
-                  f"📦 База: {tot}\n"
-                  f"⚡ Пул: {len(cache['top_fast'])}\n"
-                  f"🔵 SOCKS5: {len(cache['socks5'])}\n"
-                  f"🟣 SOCKS4: {len(cache['socks4'])}\n"
-                  f"⚪ HTTP: {len(cache['http'])}\n\n"
-                  f"Обновлено: {ts()}")
-            k=telebot.types.InlineKeyboardMarkup()
-            k.add(telebot.types.InlineKeyboardButton("◀ Назад",callback_data="adm_panel"))
-            try: bot.edit_message_text(text,cid,mid,reply_markup=k)
-            except: _send(cid,text,k)
-        elif d=="adm_refresh":
-            bot.answer_callback_query(call.id,"🔄 Запущено...")
-            def bg(): cache["updated"]=0; refresh_cache(force=True)
-            threading.Thread(target=bg,daemon=True).start()
-            _send(cid,"🔄 Обновление базы запущено в фоне")
-        elif d=="adm_scan":
-            bot.answer_callback_query(call.id,"⚡ Запускаю...")
-            cmd_scan(FMsg(call,"/scan"))
-        elif d=="adm_broadcast":
+            online = sum(1 for u in users.values() if u.get("connected"))
+            tot    = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
+            text   = (f"📊 Статистика 🌸\n\n"
+                      f"👥 Пользователей: {len(allowed_users)}\n"
+                      f"🟢 Онлайн: {online}\n"
+                      f"🚫 В бане: {len(banned_users)}\n\n"
+                      f"📦 База: {tot}\n"
+                      f"⚡ Пул: {len(cache['top_fast'])}\n"
+                      f"🔵 SOCKS5: {len(cache['socks5'])}\n"
+                      f"🟣 SOCKS4: {len(cache['socks4'])}\n"
+                      f"⚪ HTTP: {len(cache['http'])}\n\n"
+                      f"Обновлено: {ts()}")
+            k = telebot.types.InlineKeyboardMarkup()
+            k.add(telebot.types.InlineKeyboardButton("◀ Назад", callback_data="adm_panel"))
+            try:
+                bot.edit_message_text(text, cid, mid, reply_markup=k)
+            except:
+                _send(cid, text, k)
+        elif d == "adm_refresh":
+            bot.answer_callback_query(call.id, "🔄 Запущено...")
+
+            def bg():
+                cache["updated"] = 0
+                refresh_cache(force=True)
+
+            threading.Thread(target=bg, daemon=True).start()
+            _send(cid, "🔄 Обновление базы запущено в фоне~")
+        elif d == "adm_scan":
+            bot.answer_callback_query(call.id, "⚡ Запускаю...")
+            cmd_scan(FMsg(call, "/scan"))
+        elif d == "adm_broadcast":
             bot.answer_callback_query(call.id)
-            _broadcast_state[uid]=True
-            _send(cid,"📢 Отправь текст рассылки следующим сообщением\n(/cancel для отмены)")
+            _broadcast_state[uid] = True
+            _send(cid, "📢 Отправь текст рассылки следующим сообщением\n(/cancel для отмены)")
         elif d.startswith("ban_"):
-            t=int(d.split("_")[1]); banned_users.add(t)
-            k=str(t)
-            if k in allowed_users: del allowed_users[k]
-            save_users(); bot.answer_callback_query(call.id,f"🚫 {t}")
-            _send_users_list(cid,mid)
+            t = int(d.split("_")[1])
+            banned_users.add(t)
+            k = str(t)
+            if k in allowed_users:
+                del allowed_users[k]
+            save_users()
+            bot.answer_callback_query(call.id, f"🚫 {t}")
+            _send_users_list(cid, mid)
         elif d.startswith("del_"):
-            t=int(d.split("_")[1]); k=str(t)
-            if k in allowed_users: del allowed_users[k]; save_users()
-            bot.answer_callback_query(call.id,f"✅ {t}")
-            _send_users_list(cid,mid)
+            t = int(d.split("_")[1])
+            k = str(t)
+            if k in allowed_users:
+                del allowed_users[k]
+                save_users()
+            bot.answer_callback_query(call.id, f"✅ {t}")
+            _send_users_list(cid, mid)
         return
 
     # ─ Кнопки пользователя ──────────────
-    if not is_allowed(uid): bot.answer_callback_query(call.id,"🔒 Нет доступа"); return
+    if not is_allowed(uid):
+        bot.answer_callback_query(call.id, "🔒 Нет доступа~")
+        return
 
-    if d=="regen":
-        bot.answer_callback_query(call.id,"🔧 Ищу другой...")
-        cmd_generate(FMsg(call,"/generate")); return
+    if d == "regen":
+        bot.answer_callback_query(call.id, "🔧 Ищу другой...")
+        cmd_generate(FMsg(call, "/generate"))
+        return
 
-    table={
-        "connect":("/connect","⚡ Подключаюсь..."),
-        "c_socks5":("/connect socks5","🔵"),
-        "c_socks4":("/connect socks4","🟣"),
-        "c_http":("/connect http","⚪"),
-        "disconnect":("/disconnect","🔴"),
-        "rotate":("/rotate","🔄"),
-        "status":("/status",""),
-        "proxies":("/proxies",""),
-        "generate":("/generate","🔧"),
+    table = {
+        "connect":    ("/connect",       "⚡ Подключаюсь..."),
+        "c_socks5":   ("/connect socks5","🔵"),
+        "c_socks4":   ("/connect socks4","🟣"),
+        "c_http":     ("/connect http",  "⚪"),
+        "disconnect": ("/disconnect",    "🔴"),
+        "rotate":     ("/rotate",        "🔄"),
+        "status":     ("/status",        ""),
+        "proxies":    ("/proxies",       ""),
+        "generate":   ("/generate",      "🔧"),
     }
-    if d not in table: return
-    cmd,ans=table[d]
-    bot.answer_callback_query(call.id,ans or None)
-    handlers={
-        "/connect":cmd_connect,"/connect socks5":cmd_connect,
-        "/connect socks4":cmd_connect,"/connect http":cmd_connect,
-        "/disconnect":cmd_disconnect,"/rotate":cmd_rotate,
-        "/status":cmd_status,"/proxies":cmd_proxies,"/generate":cmd_generate,
+    if d not in table:
+        return
+    cmd, ans = table[d]
+    bot.answer_callback_query(call.id, ans or None)
+    handlers = {
+        "/connect":       cmd_connect,
+        "/connect socks5": cmd_connect,
+        "/connect socks4": cmd_connect,
+        "/connect http":   cmd_connect,
+        "/disconnect":    cmd_disconnect,
+        "/rotate":        cmd_rotate,
+        "/status":        cmd_status,
+        "/proxies":       cmd_proxies,
+        "/generate":      cmd_generate,
     }
-    handlers[cmd](FMsg(call,cmd))
+    handlers[cmd](FMsg(call, cmd))
 
 # ─ Рассылка ─────────────────────────────
 @bot.message_handler(func=lambda m: m.from_user.id in _broadcast_state
                                     and _broadcast_state[m.from_user.id] is True
-                                    and m.text!="/cancel")
+                                    and m.text != "/cancel")
 def handle_broadcast(msg):
-    if not is_admin(msg.from_user.id): return
-    _broadcast_state.pop(msg.from_user.id,None)
-    ok=fail=0
+    if not is_admin(msg.from_user.id):
+        return
+    _broadcast_state.pop(msg.from_user.id, None)
+    ok = fail = 0
     for uid_str in list(allowed_users.keys()):
-        try: bot.send_message(int(uid_str),f"📢 Сообщение от администратора\n\n{msg.text}"); ok+=1
-        except: fail+=1
-    _send(msg.chat.id,f"✅ Рассылка\n✔ Доставлено: {ok}\n✖ Ошибок: {fail}")
+        try:
+            bot.send_message(int(uid_str),
+                f"📢 Сообщение от администратора 🌸\n\n{msg.text}")
+            ok += 1
+        except:
+            fail += 1
+    _send(msg.chat.id, f"✅ Рассылка\n✔ Доставлено: {ok}\n✖ Ошибок: {fail}")
+
+# ─ /cancel ──────────────────────────────
+@bot.message_handler(commands=["cancel"])
+def cmd_cancel(msg):
+    uid = msg.from_user.id
+    _deobf_state.pop(uid, None)
+    _broadcast_state.pop(uid, None)
+    _send(msg.chat.id, "❌ Отменено~")
 
 # ═══════════════════════════════════════
 #              ЗАПУСК
 # ═══════════════════════════════════════
-if __name__=="__main__":
-    print("="*50)
-    print("  TOGAFF VPN · Ultimate Edition")
+if __name__ == "__main__":
+    print("=" * 55)
+    print("  🌸 TOGAFF VPN · Astolfo Ultimate Edition 🌸")
     print(f"  PySocks: {'✓ SOCKS5/4 активны' if SOCKS_OK else '✗ pip install PySocks requests[socks]'}")
     print(f"  Фото:    {'✓ '+WELCOME_PHOTO if os.path.exists(WELCOME_PHOTO) else '✗ нет файла '+WELCOME_PHOTO}")
     print(f"  Admins:  {ADMIN_IDS}")
     print(f"  Users:   {len(allowed_users)}")
-    print("="*50)
+    print("=" * 55)
 
     def startup():
-        print("Загружаю базу...")
+        print("🌸 Загружаю базу...")
         refresh_cache()
         time.sleep(3)
-        print("Прогреваю смарт-пул...")
-        my_ip=get_my_ip() or ""
+        print("🌸 Прогреваю смарт-пул...")
+        my_ip = get_my_ip() or ""
         build_smart_pool(my_ip, sample=SCAN_SAMPLE, workers=VERIFY_WORKERS)
 
     def auto_refresh():
         while True:
             time.sleep(TOP_TTL)
-            my_ip=get_my_ip() or ""
+            my_ip = get_my_ip() or ""
             if my_ip:
-                print("Авто-обновление пула...")
-                build_smart_pool(my_ip, sample=SCAN_SAMPLE//2, workers=VERIFY_WORKERS)
+                print("🌸 Авто-обновление пула...")
+                build_smart_pool(my_ip, sample=SCAN_SAMPLE // 2, workers=VERIFY_WORKERS)
 
-    threading.Thread(target=startup,daemon=True).start()
-    threading.Thread(target=auto_refresh,daemon=True).start()
+    threading.Thread(target=startup,     daemon=True).start()
+    threading.Thread(target=auto_refresh, daemon=True).start()
     bot.infinity_polling(timeout=30, long_polling_timeout=20)
