@@ -682,9 +682,7 @@ def kb_main(connected=False):
         telebot.types.InlineKeyboardButton("⚪ HTTP",    callback_data="c_http"),
     )
     k.add(telebot.types.InlineKeyboardButton("🔓 Деобфускатор", callback_data="deobf_menu"))
-    if True:  # mini app
-        k.add(telebot.types.InlineKeyboardButton("🌐 Веб-панель",
-              web_app=telebot.types.WebAppInfo(url=MINI_APP_URL)))
+    # WebApp убран — требует HTTPS и верифицированный домен
     return k
 
 def kb_generate():
@@ -753,87 +751,89 @@ class FMsg:
 # ═══════════════════════════════════════
 @bot.message_handler(commands=["start"])
 def cmd_start(msg):
-    uid  = int(msg.from_user.id)
-    name = msg.from_user.first_name or "анон"
-    print(f"[start] uid={uid} admin={is_admin(uid)} allowed={is_allowed(uid)}")
+    try:
+        uid  = int(msg.from_user.id)
+        name = msg.from_user.first_name or "анон"
+        print(f"[start] uid={uid} admin={is_admin(uid)} allowed={is_allowed(uid)}")
 
-    # FIX: Сразу добавляем админа если ещё нет
-    if is_admin(uid):
+        # Сразу добавляем админа в whitelist
+        if is_admin(uid):
+            key = str(uid)
+            if key not in allowed_users:
+                allowed_users[key] = {
+                    "username":   getattr(msg.from_user, "username", "") or "",
+                    "first_name": name,
+                    "added":      ts(),
+                    "uses":       0
+                }
+                save_users()
+                print(f"[start] Добавлен админ {uid}")
+
+        if not is_allowed(uid):
+            bot.send_message(msg.chat.id,
+                f"{ASTOLFO_ART}\n\n"
+                "Привет! Доступ закрыт~\n\n"
+                "Бот работает только по приглашению.\n"
+                "Обратись к администратору")
+            return
+
+        # Обновляем счётчик
         key = str(uid)
-        if key not in allowed_users:
-            allowed_users[key] = {
-                "username":   getattr(msg.from_user, "username", "") or "",
-                "first_name": name,
-                "added":      ts(),
-                "uses":       0
-            }
+        if key in allowed_users:
+            allowed_users[key]["uses"] = allowed_users[key].get("uses", 0) + 1
             save_users()
-            print(f"[start] Добавлен админ {uid}")
 
-    if not is_allowed(uid):
-        _send(msg.chat.id,
+        u     = get_user(uid)
+        total = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
+        fast  = len(cache["top_fast"])
+        conn_line = (f"Подключён — {u['proxy']['host']} ({u['proxy']['type'].upper()})"
+                     if u["connected"] and u["proxy"] else "Не подключён")
+        adm_badge = " [ADMIN]" if is_admin(uid) else ""
+
+        text = (
             f"{ASTOLFO_ART}\n\n"
-            "🔒 Привет! Доступ закрыт~\n\n"
-            "Бот работает только по приглашению.\n"
-            "Обратись к администратору 💕")
-        return
+            f"Привет, {name}!{adm_badge}\n\n"
+            f"Togaff VPN - Astolfo Edition\n"
+            f"──────────────────────\n"
+            f"{conn_line}\n\n"
+            f"Прокси в базе: {total}\n"
+            f"Лучших в пуле: {fast}\n\n"
+            f"──────────────────────\n"
+            f"Команды:\n"
+            f"/connect - подключение\n"
+            f"/disconnect - отключиться\n"
+            f"/rotate - сменить IP\n"
+            f"/pick - выбрать прокси\n"
+            f"/scan - найти серверы\n"
+            f"/status - статус\n"
+            f"/ip - мой IP\n"
+            f"/generate - конфиг\n"
+            f"/proxies - список серверов\n"
+            f"/refresh - обновить базу\n"
+            f"/deobf - деобфускатор\n"
+        )
+        if is_admin(uid):
+            text += "/admin - панель админа\n"
 
-    # Обновляем счётчик использований
-    key = str(uid)
-    if key in allowed_users:
-        allowed_users[key]["uses"] = allowed_users[key].get("uses", 0) + 1
-        save_users()
+        # Фото отдельно, ошибка не ломает меню
+        if os.path.exists(WELCOME_PHOTO):
+            try:
+                with open(WELCOME_PHOTO, "rb") as f:
+                    bot.send_photo(msg.chat.id, f)
+            except Exception as e:
+                print(f"[start] фото: {e}")
 
-    u     = get_user(uid)
-    total = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
-    fast  = len(cache["top_fast"])
+        bot.send_message(msg.chat.id, text, reply_markup=kb_main(u["connected"]))
+        print(f"[start] OK uid={uid}")
 
-    if u["connected"] and u["proxy"]:
-        conn_line = f"🟢 Подключён — {u['proxy']['host']} ({u['proxy']['type'].upper()})"
-    else:
-        conn_line = "🔴 Не подключён"
-
-    adm_badge = "  👑 Администратор" if is_admin(uid) else ""
-
-    text = (
-        f"{ASTOLFO_ART}\n\n"
-        f"🌸 Привет, {name}!{adm_badge}\n\n"
-        f"🛡 Togaff VPN · Astolfo Ultimate Edition\n"
-        f"──────────────────────\n"
-        f"{conn_line}\n\n"
-        f"📦 Прокси в базе:   {total}\n"
-        f"⚡ Лучших в пуле:   {fast}\n"
-        f"🔒 SOCKS5 · SOCKS4 · HTTP · Деобфускатор\n\n"
-        f"──────────────────────\n"
-        f"📋 Команды:\n"
-        f"/connect        авто-подключение\n"
-        f"/connect s5     только SOCKS5\n"
-        f"/connect s4     только SOCKS4\n"
-        f"/connect http   только HTTP\n"
-        f"/disconnect     отключиться\n"
-        f"/rotate         сменить IP\n"
-        f"/pick           выбрать прокси вручную\n"
-        f"/scan           найти быстрые серверы\n"
-        f"/status         текущий статус\n"
-        f"/ip             мой IP\n"
-        f"/generate       конфиг прокси\n"
-        f"/proxies        список серверов\n"
-        f"/refresh        обновить базу\n"
-        f"/deobf          деобфускатор кода\n"
-    )
-
-    if is_admin(uid):
-        text += f"/admin          панель администратора\n"
-
-    # Отправляем фото (если есть), потом меню
-    if os.path.exists(WELCOME_PHOTO):
+    except Exception as e:
+        import traceback
+        err = traceback.format_exc()
+        print(f"[start] ОШИБКА: {e}\n{err}")
         try:
-            with open(WELCOME_PHOTO, "rb") as f:
-                bot.send_photo(msg.chat.id, f)
-        except Exception as e:
-            print(f"[start] фото ошибка: {e}")
-
-    _send(msg.chat.id, text, kb_main(u["connected"]))
+            bot.send_message(msg.chat.id, "Бот работает! Попробуй /start ещё раз")
+        except:
+            pass
 
 # ═══════════════════════════════════════
 #       /deobf — деобфускатор
