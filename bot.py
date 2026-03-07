@@ -465,86 +465,244 @@ def find_best_proxy(my_ip, exclude=None, ptype_filter=None, on_try=None):
     return None
 
 # ═══════════════════════════════════════
-#     ДЕОБФУСКАТОР v1 (встроенный)
+#   ДЕОБФУСКАТОР v1 — ИСПРАВЛЕННАЯ ВЕРСИЯ
+#
+#  Исправлено 6 багов:
+#  1. _exec_pattern: теперь ловит все варианты
+#       exec((_)(b'...')), exec(_(b"...")),
+#       exec((__)(b'...')), с пробелами, двойными кавычками
+#  2. Padding: (8-pad) → правильный (4-pad)%4
+#  3. _deobf_combo: теперь тоже удаляет lambda-обёртку
+#  4. rendy: добавлен re.DOTALL для многострочных payload
+#  5. _strip_comments: не ломает строки содержащие # (url, цвета и т.д.)
+#  6. combo detect-паттерны: исправлен 's*' → '\s*' (пробел после decompress())
 # ═══════════════════════════════════════
-_exec_pattern = r"exec\(\(_\)\(b'([\s\S]+?)'\)\)"
-_comments_pat = r"#(.*?)\n"
-_deobf_note   = "# DECODED BY @ArrhythmiaFucksn\n\n"
 
+# Универсальный паттерн exec-обёртки — ловит все реальные варианты:
+#   exec((_)(b'...'))   exec((_)(b"..."))
+#   exec(_(b'...'))     exec(_(b"..."))
+#   exec((__)(b'...'))  с произвольными пробелами
+_exec_pattern = r"""exec\(\s*\(?\s*_+\s*\)?\s*\(\s*b['"]([\s\S]+?)['"]\s*\)\s*\)"""
+
+_deobf_note = "# DECODED BY @ArrhythmiaFucksn\n\n"
+
+# Все паттерны обнаружения — исправлено: \s*; вместо ; и \s* вместо s*
 _obfuscation_patterns = {
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\);": "base64",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\);": "base32",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\);": "base16",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(__\[::-1\]\);":  "zlib",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(__\[::-1\]\);":  "gzip",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(__\[::-1\]\);":  "lzma",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\);": "base64+zlib",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\);": "base64+gzip",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\);": "base64+lzma",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\);": "base32+zlib",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\);": "base32+gzip",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\);": "base32+lzma",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\);": "base16+zlib",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\);": "base16+gzip",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\);": "base16+lzma",
-    r"_=lambda __:__import__\('marshal'\)\.loads\(__import__\('gzip'\)\.decompress\(__import__\('lzma'\)\.decompress\(__import__\('zlib'\)\.decompress\(__import__\('base64'\)\.b64decode\(__\[::-1\]\)\)\)\)\);exec\(_\('(.*?)'\)\)": "rendy (marshal+gzip+lzma+zlib+base64)",
+    # Простые однослойные
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\s*;": "base64",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\s*;": "base32",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\s*;": "base16",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(__\[::-1\]\)\s*;":  "zlib",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(__\[::-1\]\)\s*;":  "gzip",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(__\[::-1\]\)\s*;":  "lzma",
+    # Комбо base64 + компрессор (исправлено: \s* вместо s*)
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\s*\)\s*;": "base64+zlib",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\s*\)\s*;": "base64+gzip",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\s*\)\s*;": "base64+lzma",
+    # Комбо base32 + компрессор
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\s*\)\s*;": "base32+zlib",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\s*\)\s*;": "base32+gzip",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\s*\)\s*;": "base32+lzma",
+    # Комбо base16 + компрессор
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\s*\)\s*;": "base16+zlib",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\s*\)\s*;": "base16+gzip",
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\s*\)\s*;": "base16+lzma",
+    # Rendy obf полный паттерн
+    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('marshal'\)\.loads\(\s*__import__\('gzip'\)\.decompress\(\s*__import__\('lzma'\)\.decompress\(\s*__import__\('zlib'\)\.decompress\(\s*__import__\('base64'\)\.b64decode\(\s*__\[::-1\]\s*\)\s*\)\s*\)\s*\)\s*\)\s*;": "rendy (marshal+gzip+lzma+zlib+base64)",
 }
 
+def _b64_pad(s: str) -> str:
+    """Правильный padding: добавляем (4 - len%4) % 4 символов '='"""
+    pad = len(s) % 4
+    if pad:
+        s += "=" * (4 - pad)
+    return s
+
 def _strip_comments(code: str) -> str:
-    return re.sub(_comments_pat, "", code)
+    """
+    Удаляет комментарии Python (#...) но НЕ трогает # внутри строк.
+    Построчный анализ: находим # только вне строковых литералов.
+    """
+    result_lines = []
+    for line in code.split("\n"):
+        in_single = False
+        in_double = False
+        out = []
+        i = 0
+        while i < len(line):
+            c = line[i]
+            if c == "'" and not in_double:
+                in_single = not in_single
+                out.append(c)
+            elif c == '"' and not in_single:
+                in_double = not in_double
+                out.append(c)
+            elif c == "#" and not in_single and not in_double:
+                break  # реальный комментарий — обрезаем
+            else:
+                out.append(c)
+            i += 1
+        result_lines.append("".join(out).rstrip())
+    return "\n".join(result_lines)
 
 def _deobf_b64(code: str) -> str:
+    """Декодирует base64-обфускацию. Многопроходный — снимает вложенные слои."""
     def dec(m):
-        s = m.group(1)
-        pad = len(s) % 4
-        if pad:
-            s += "=" * (8 - pad)
-        return base64.b64decode(s[::-1]).decode("utf-8", errors="replace")
-    while re.search(_exec_pattern, code):
+        try:
+            return base64.b64decode(_b64_pad(m.group(1))[::-1]).decode("utf-8", errors="replace")
+        except Exception as e:
+            return f"# [v1 b64 err: {e}]\n"
+    prev = None
+    while prev != code and re.search(_exec_pattern, code):
+        prev = code
         code = re.sub(_exec_pattern, dec, code)
-        code = re.sub(r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\);", "", code)
+        code = re.sub(
+            r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\s*;?",
+            "", code)
     return _strip_comments(code).strip()
 
 def _deobf_b32(code: str) -> str:
+    """Декодирует base32-обфускацию."""
     def dec(m):
-        s = m.group(1)
-        pad = len(s) % 4
-        if pad:
-            s += "=" * (8 - pad)
-        return base64.b32decode(s[::-1]).decode("utf-8", errors="replace")
-    while re.search(_exec_pattern, code):
+        try:
+            return base64.b32decode(_b64_pad(m.group(1))[::-1]).decode("utf-8", errors="replace")
+        except Exception as e:
+            return f"# [v1 b32 err: {e}]\n"
+    prev = None
+    while prev != code and re.search(_exec_pattern, code):
+        prev = code
         code = re.sub(_exec_pattern, dec, code)
-        code = re.sub(r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\);", "", code)
+        code = re.sub(
+            r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\s*;?",
+            "", code)
     return _strip_comments(code).strip()
 
 def _deobf_b16(code: str) -> str:
+    """Декодирует base16/hex-обфускацию. Padding для hex не нужен."""
     def dec(m):
-        return base64.b16decode(m.group(1)[::-1]).decode("utf-8", errors="replace")
-    while re.search(_exec_pattern, code):
+        try:
+            return base64.b16decode(m.group(1)[::-1].upper()).decode("utf-8", errors="replace")
+        except Exception as e:
+            return f"# [v1 b16 err: {e}]\n"
+    prev = None
+    while prev != code and re.search(_exec_pattern, code):
+        prev = code
         code = re.sub(_exec_pattern, dec, code)
-        code = re.sub(r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\);", "", code)
+        code = re.sub(
+            r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\s*;?",
+            "", code)
     return _strip_comments(code).strip()
 
-def _deobf_combo(code: str, base_fn, compress_mod) -> str:
+def _deobf_compress_only(code: str, compress_mod, mod_name: str) -> str:
+    """Декодирует чистую compress-обфускацию (zlib/gzip/lzma без base-кодирования)."""
     def dec(m):
-        s = m.group(1)
-        pad = len(s) % 4
-        if pad:
-            s += "=" * (8 - pad)
-        decoded = base_fn(s[::-1])
-        return compress_mod.decompress(decoded).decode("utf-8", errors="replace")
-    while re.search(_exec_pattern, code):
+        try:
+            raw = m.group(1).encode("latin-1")
+            return compress_mod.decompress(raw[::-1]).decode("utf-8", errors="replace")
+        except Exception as e:
+            return f"# [v1 {mod_name} err: {e}]\n"
+    prev = None
+    while prev != code and re.search(_exec_pattern, code):
+        prev = code
         code = re.sub(_exec_pattern, dec, code)
+        code = re.sub(
+            r"_\s*=\s*lambda\s*__\s*:\s*__import__\('" + mod_name + r"'\)\.decompress\(__\[::-1\]\)\s*;?",
+            "", code)
     return _strip_comments(code).strip()
+
+def _deobf_combo(code: str, base_fn, compress_mod, base_name: str, compress_name: str) -> str:
+    """
+    Декодирует комбо-обфускацию: compress(base_decode(payload[::-1])).
+    Исправлено: теперь тоже удаляет lambda-строку после каждого прохода.
+    """
+    def dec(m):
+        try:
+            decoded = base_fn(_b64_pad(m.group(1))[::-1])
+            return compress_mod.decompress(decoded).decode("utf-8", errors="replace")
+        except Exception as e:
+            return f"# [v1 {base_name}+{compress_name} err: {e}]\n"
+    # Паттерн для удаления lambda-обёртки (с \s* чтобы пробелы не мешали)
+    lambda_pat = (
+        r"_\s*=\s*lambda\s*__\s*:\s*__import__\('" + compress_name + r"'\)\.decompress\(\s*"
+        r"__import__\('base64'\)\." + base_name + r"decode\(__\[::-1\]\)\s*\)\s*;?"
+    )
+    prev = None
+    while prev != code and re.search(_exec_pattern, code):
+        prev = code
+        code = re.sub(_exec_pattern, dec, code)
+        code = re.sub(lambda_pat, "", code)
+    return _strip_comments(code).strip()
+
+def _deobf_rendy(code: str):
+    """
+    Декодирует Rendy-обфускацию: marshal.loads(gzip(lzma(zlib(b64decode(payload[::-1]))))).
+    Исправлено: re.DOTALL для многострочных payload + правильный padding.
+    """
+    # Основной паттерн с re.DOTALL
+    pat_main = (
+        r"_\s*=\s*lambda\s*__\s*:.*?marshal.*?\n?"
+        r"exec\s*\(\s*_\s*\(\s*['\"]"
+        r"([\s\S]+?)"
+        r"['\"]\s*\)\s*\)"
+    )
+    m = re.search(pat_main, code, re.DOTALL)
+    if not m:
+        # Фоллбэк: ищем просто exec(_('...')) с base64-подобным содержимым
+        m = re.search(r"exec\s*\(\s*_\s*\(\s*['\"]([A-Za-z0-9+/=\n]+)['\"]\s*\)\s*\)", code, re.DOTALL)
+    if not m:
+        return None
+    try:
+        enc = m.group(1).replace("\n", "").replace(" ", "")
+        enc = _b64_pad(enc)
+        raw = base64.b64decode(enc[::-1])
+        raw = zlib.decompress(raw)
+        raw = lzma.decompress(raw)
+        raw = gzip.decompress(raw)
+        code_obj = marshal.loads(raw)
+        if isinstance(code_obj, bytes):
+            return code_obj.decode("utf-8", errors="replace")
+        import types as _types, dis as _dis, io as _io
+        if isinstance(code_obj, _types.CodeType):
+            buf = _io.StringIO()
+            _dis.dis(code_obj, file=buf)
+            return f"# [marshal CodeType — дизассемблировано]\n{buf.getvalue()}"
+        return str(code_obj)
+    except Exception as e:
+        return None
 
 def detect_obfuscation(code: str) -> str:
+    """Определяет метод обфускации по паттернам lambda + эвристике exec."""
     for pat, name in _obfuscation_patterns.items():
         if re.search(pat, code):
             return name
+    # Эвристика: если есть exec((_)(b'...')) но lambda уже удалена —
+    # определяем по наличию ключевых слов в коде
+    if re.search(_exec_pattern, code):
+        if "b64decode" in code:
+            if "zlib" in code:   return "base64+zlib"
+            if "gzip" in code:   return "base64+gzip"
+            if "lzma" in code:   return "base64+lzma"
+            return "base64"
+        if "b32decode" in code:
+            if "zlib" in code:   return "base32+zlib"
+            if "gzip" in code:   return "base32+gzip"
+            if "lzma" in code:   return "base32+lzma"
+            return "base32"
+        if "b16decode" in code:
+            if "zlib" in code:   return "base16+zlib"
+            if "gzip" in code:   return "base16+gzip"
+            if "lzma" in code:   return "base16+lzma"
+            return "base16"
+        if "zlib"   in code:     return "zlib"
+        if "gzip"   in code:     return "gzip"
+        if "lzma"   in code:     return "lzma"
     return None
 
 def deobfuscate_code(code: str) -> tuple:
-    """Returns (deobfuscated_code, method_name) or (None, error_msg)"""
+    """
+    Главная функция v1 деобфускатора.
+    Возвращает (deobfuscated_code, method_name) или (None, error_msg).
+    """
     method = detect_obfuscation(code)
     if not method:
         return None, "Обфускация не обнаружена"
@@ -556,39 +714,40 @@ def deobfuscate_code(code: str) -> tuple:
             result = _deobf_b32(code)
         elif method == "base16":
             result = _deobf_b16(code)
+        elif method == "zlib":
+            result = _deobf_compress_only(code, zlib, "zlib")
+        elif method == "gzip":
+            result = _deobf_compress_only(code, gzip, "gzip")
+        elif method == "lzma":
+            result = _deobf_compress_only(code, lzma, "lzma")
         elif method == "base64+zlib":
-            result = _deobf_combo(code, base64.b64decode, zlib)
+            result = _deobf_combo(code, base64.b64decode, zlib,  "b64", "zlib")
         elif method == "base64+gzip":
-            result = _deobf_combo(code, base64.b64decode, gzip)
+            result = _deobf_combo(code, base64.b64decode, gzip,  "b64", "gzip")
         elif method == "base64+lzma":
-            result = _deobf_combo(code, base64.b64decode, lzma)
+            result = _deobf_combo(code, base64.b64decode, lzma,  "b64", "lzma")
         elif method == "base32+zlib":
-            result = _deobf_combo(code, base64.b32decode, zlib)
+            result = _deobf_combo(code, base64.b32decode, zlib,  "b32", "zlib")
         elif method == "base32+gzip":
-            result = _deobf_combo(code, base64.b32decode, gzip)
+            result = _deobf_combo(code, base64.b32decode, gzip,  "b32", "gzip")
         elif method == "base32+lzma":
-            result = _deobf_combo(code, base64.b32decode, lzma)
+            result = _deobf_combo(code, base64.b32decode, lzma,  "b32", "lzma")
         elif method == "base16+zlib":
-            result = _deobf_combo(code, base64.b16decode, zlib)
+            result = _deobf_combo(code, base64.b16decode, zlib,  "b16", "zlib")
         elif method == "base16+gzip":
-            result = _deobf_combo(code, base64.b16decode, gzip)
+            result = _deobf_combo(code, base64.b16decode, gzip,  "b16", "gzip")
         elif method == "base16+lzma":
-            result = _deobf_combo(code, base64.b16decode, lzma)
+            result = _deobf_combo(code, base64.b16decode, lzma,  "b16", "lzma")
         elif "rendy" in method:
-            pat = r"_=lambda __:__import__\('marshal'\)\.loads\(.+?\);exec\(_\('(.*?)'\)\)"
-            m = re.search(pat, code)
-            if m:
-                enc = m.group(1)
-                raw = base64.b64decode(enc[::-1])
-                raw = zlib.decompress(raw)
-                raw = lzma.decompress(raw)
-                raw = gzip.decompress(raw)
-                result = marshal.loads(raw).decode("utf-8", errors="replace")
+            result = _deobf_rendy(code)
         if result is not None:
             return _deobf_note + result, method
         return None, f"Не удалось декодировать ({method})"
     except Exception as e:
-        return None, f"Ошибка: {e}"
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[deobf v1] ERR ({method}):\n{tb}")
+        return None, f"Ошибка ({method}): {e}"
 
 # ═══════════════════════════════════════
 #   ДЕОБФУСКАТОР v2 — Ренди 2.0
