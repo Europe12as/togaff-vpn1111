@@ -117,23 +117,7 @@ MY_PROXIES_HTTP = [
     ("31.7.38.227", 80),
 ]
 
-MY_VLESS_PROXIES = [
-    "vless://02f62dd5-218f-4e9f-9c4b-f8a2e452533e@78.159.247.79:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.vk.com&fp=chrome&pbk=HxjD-7OeJUtrNFsW4PEqThSs6fujV9Mkl5Z4igx21k8&sid=ef&type=tcp#RU-GCN",
-    "vless://02fb468f-21f2-460e-bfa1-ef52ae5e627f@95.163.182.172:443?encryption=none&flow=xtls-rprx-vision&fp=chrome&pbk=5bGFIWSo4vlrd9Tv1yFcpdpSjrjYYN20SOWHYfighHc&security=reality&sid=aad92345&sni=api-maps.yandex.ru&type=tcp#SE-CIDR",
-    "vless://0339f151-d187-4d5e-b0eb-994cebf3f9ca@185.130.112.165:8448?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&fp=random&sni=eh.vk.com&pbk=Ox4BT0R5103EpplP2y6TIVv0VC-xBR2-YT6EJ4YmkUw&spx=/#RU-9452",
-    "vless://0eb0019b66404203a7e07701f61bf766@91.220.8.177:443?type=tcp&encryption=none&flow=xtls-rprx-vision&sni=m.vk.com&fp=chrome&security=reality&pbk=n0e-y_JNPYLzhJkFuhlq6-k1lgUG43cmiQXkP2Pv_wc&sid=aabbccdd#DE-Reality",
-    "vless://0ec58af7-0098-430e-8efd-551322a7bb5d@5.188.143.238:50445?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&fp=chrome&sni=celular.vk.com&pbk=ZSzB9TQPGNcCiC0WLmciF5Jc8doJDvdRgbqTi8SCoEM&sid=a1b2c3d4e5f6789a#RU-409",
-    "vless://0a9fe7e0-e02d-42ca-bebd-ecb4292f180c@146.185.240.23:443?security=reality&encryption=none&pbk=zii4nGNapnFKL6SN8GzWNqFlElBvUCUFUThEP0kFH04&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=m.vk.ru&sid=c6ef72e4635d15a5#RU-383",
-    "vless://11f81498-983c-401c-9e6c-b458999d498f@84.201.172.12:9443?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&fp=chrome&sni=www.vk.com&pbk=59iHd67rGlyJBUpDq5NXC91EB0U4AXtSlOjAQsW2D14#RU-9386",
-    "vless://12a57f4b-813d-4e0f-b15f-2234c71fd41d@158.160.189.247:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=m.vk.com&fp=chrome&pbk=Qddpg8luihgzgx4g4uMJklXzlrMCd8L1igJSWrRUvSc&sid=887c0d72e771a934&type=tcp#PL-166",
-    "vless://07cd9dbe-21ac-4871-817d-c772687e4b7c@103.27.157.79:2053?encryption=none&flow=xtls-rprx-vision&fp=chrome&pbk=WckOSneVajAzpH0sZSAFAWPnmwuuEXKZrTICNj5_hHU&security=reality&sid=423bccc9c13fb509&sni=www.ibm.com&type=tcp#DE-Reality2",
-    "vless://05732283-b4ee-4a86-920c-df9cf83d16c4@51.250.4.154:8443?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&fp=chrome&sni=m.vk.com&pbk=4mshoogy3ikozr2hra8vckfts7ufmfey2txpnd4jfzm&sid=adcdd261d4e5aea1#RU-Reality2",
-    "vless://0c62469a-009f-4050-bbc6-2be5d74e64f7@212.111.84.218:443?security=reality&encryption=none&pbk=x6cB3avjxjxzhNESk8iJTTCzOPKXnB0AbnjKSqKkang&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=maps.yandex.ru&sid=8f0a12bc34de5678#KZ-Reality",
-    "vless://0ff8dbfb-d7ee-4a19-b22d-b652a8b52e22@212.111.84.82:443?security=reality&encryption=none&pbk=7zd9mJilgjOrg_ohtw23Vmio-pdnYqeP_r-kiWt87Cg&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=m.vk.ru&sid=f4b4a6365558ea2e#RU-421",
-    "vless://0f6c83bc-34ba-4ca1-96e6-08b3620cbce5@145.223.69.171:443?encryption=none&security=reality&sni=www.vk.com&fp=firefox&pbk=JQHrZXZRnkZUOMdNHS7X1fPyMDqKjiQWlfTdntIOqzg&sid=a6b92e23&type=tcp#FR-VK",
-    "vless://0f6c83bc-34ba-4ca1-96e6-08b3620cbce5@217.16.19.114:443?encryption=none&security=reality&sni=www.vk.com&fp=chrome&pbk=s0qb5ggFZN3X7QXWtgK4o7UgfS9DlpFC6JT6OWVs6X4&sid=a5d90165&type=tcp#RU-VK-1",
-    "vless://126e5a65-e81a-46ce-bd61-605f32f1352e@91.217.10.166:9443?flow=xtls-rprx-vision&security=reality&sni=api.avito.ru&pbk=WvNaAxI0W__qfUKbtysH4IwF155YENlv3PG6crCmPkA&type=tcp#KZ-3",
-]
+
 
 # ═══════════════════════════════════════
 #          ИСТОЧНИКИ ПРОКСИ
@@ -663,7 +647,7 @@ def r2_try_decompress_chain(data: bytes, depth: int = 0, max_depth: int = 8) -> 
 def r2_extract_layer1(source: str) -> str:
     patterns = [
         r"(?:__[a-z_]+__\s*=\s*)?(?:exec|eval)\s*\(\s*(?:.*?\.)?(?:decompress|loads|decode)\s*\([^)]*?['\"]([ A-Za-z0-9+/=\n]+)['\"]",
-        r"(?:exec|eval)\s*\([^)]*?b['\"]([\\\x0-9a-fA-F]+)['\"]",
+        r"(?:exec|eval)\s*\([^)]*?b['\"]([0-9a-fA-F\\x]+)['\"]",
     ]
     for p in patterns:
         m = re.search(p, source, re.DOTALL)
@@ -999,8 +983,7 @@ def kb_main(connected=False):
         telebot.types.InlineKeyboardButton("🟣 SOCKS4",  callback_data="c_socks4"),
         telebot.types.InlineKeyboardButton("⚪ HTTP",    callback_data="c_http"),
     )
-    k.add(telebot.types.InlineKeyboardButton("🔓 Деобфускатор v1", callback_data="deobf_menu"))
-    k.add(telebot.types.InlineKeyboardButton("🔓 Деобфускатор v2 (Ренди 2.0)", callback_data="deobf2_menu"))
+    k.add(telebot.types.InlineKeyboardButton("🔓 Деобфускатор (АВТО)", callback_data="deobf_menu"))
     return k
 
 def kb_generate():
@@ -1046,9 +1029,11 @@ def kb_proxy_list(proxies, page=0):
 
 def kb_deobf():
     k = telebot.types.InlineKeyboardMarkup(row_width=1)
-    k.add(telebot.types.InlineKeyboardButton("🔍 Определить обфускацию", callback_data="deobf_detect"))
-    k.add(telebot.types.InlineKeyboardButton("🔓 Деобфусцировать файл",  callback_data="deobf_run"))
-    k.add(telebot.types.InlineKeyboardButton("◀ Назад",                  callback_data="back_main"))
+    k.add(telebot.types.InlineKeyboardButton("⚡ АВТО (v1 → v2 fallback)",    callback_data="deobf_auto"))
+    k.add(telebot.types.InlineKeyboardButton("🔍 Определить метод",            callback_data="deobf_detect"))
+    k.add(telebot.types.InlineKeyboardButton("🔓 Только v1 (base/zlib/rendy)", callback_data="deobf_run"))
+    k.add(telebot.types.InlineKeyboardButton("🔓 Только v2 (Ренди 2.0)",       callback_data="deobf2_run"))
+    k.add(telebot.types.InlineKeyboardButton("◀ Назад",                        callback_data="back_main"))
     return k
 
 def kb_deobf2():
@@ -1136,9 +1121,8 @@ def cmd_start(msg):
             f"/generate - конфиг\n"
             f"/proxies - список серверов\n"
             f"/refresh - обновить базу\n"
-            f"/deobf  - деобфускатор v1\n"
-            f"/deobf2 - деобфускатор v2 (Ренди 2.0)\n"
-            f"/vless  - VLESS/Reality ссылки\n"
+            f"/deobf  - авто деобфускатор\n"
+            f"/deobf2 - Ренди 2.0 (universal)\n"
         )
         if is_admin(uid):
             text += "/admin - панель админа\n"
@@ -1166,16 +1150,24 @@ def cmd_start(msg):
 @bot.message_handler(commands=["deobf"])
 @access_required
 def cmd_deobf(msg):
+    uid = msg.from_user.id
+    _deobf_state[uid] = "waiting_auto"
     _send(msg.chat.id,
-        "🔓 Деобфускатор v1\n\n"
+        "🔓 Авто-деобфускатор 🌸\n\n"
+        "Режим АВТО: сначала пробует v1, если не вышло — автоматически запускает Ренди 2.0\n\n"
         "Поддерживаемые методы:\n"
-        "• base64 / base32 / base16\n"
-        "• zlib / gzip / lzma\n"
-        "• base64+zlib / base64+gzip / base64+lzma\n"
-        "• base32+zlib / base32+gzip / base32+lzma\n"
-        "• base16+zlib / base16+gzip / base16+lzma\n"
-        "• Rendy obf (marshal+gzip+lzma+zlib+base64)\n\n"
-        "Выбери действие:",
+        "v1:\n"
+        "  • base64 / base32 / base16\n"
+        "  • zlib / gzip / lzma\n"
+        "  • base64+zlib / base64+gzip / base64+lzma\n"
+        "  • base32+zlib / base32+gzip / base32+lzma\n"
+        "  • base16+zlib / base16+gzip / base16+lzma\n"
+        "  • Rendy obf (marshal+gzip+lzma+zlib+base64)\n\n"
+        "v2 (Ренди 2.0 fallback):\n"
+        "  • XOR строки + state-machine\n"
+        "  • Call-wrappers + dummy vars\n"
+        "  • getattr chains + cleanup\n\n"
+        "📎 Отправь .py файл:",
         kb_deobf())
 
 # ═══════════════════════════════════════
@@ -1211,7 +1203,7 @@ def handle_document(msg):
 
     state = _deobf_state.get(uid)
 
-    if state not in ("waiting", "waiting_detect", "waiting_v2"):
+    if state not in ("waiting", "waiting_detect", "waiting_v2", "waiting_auto"):
         bot.send_message(msg.chat.id,
             "Чтобы деобфусцировать файл — нажми кнопку Деобфускатор или /deobf / /deobf2")
         return
@@ -1222,33 +1214,76 @@ def handle_document(msg):
         return
 
     _deobf_state.pop(uid, None)
-    wait = bot.send_message(msg.chat.id, "Анализирую файл...")
+    wait = bot.send_message(msg.chat.id, "🔍 Читаю файл...")
 
     def do():
         try:
             file_info  = bot.get_file(doc.file_id)
             downloaded = bot.download_file(file_info.file_path)
             code = downloaded.decode("utf-8", errors="replace")
+            lines_in  = code.count('\n') + 1
+            chars_in  = len(code)
 
-            # ── Режим только определения (v1) ──
+            # ══════════════════════════════════════
+            # РЕЖИМ: только определение (v1 detect)
+            # ══════════════════════════════════════
             if state == "waiting_detect":
-                method = detect_obfuscation(code)
-                if method:
-                    bot.edit_message_text(
-                        f"Найдена обфускация: {method}\n\n"
-                        f"Используй /deobf -> Деобфусцировать для расшифровки",
-                        msg.chat.id, wait.message_id)
+                bot.edit_message_text("🔍 Определяю метод обфускации...", msg.chat.id, wait.message_id)
+                method_v1 = detect_obfuscation(code)
+
+                # Дополнительно проверяем признаки v2
+                has_xor    = bool(re.search(r'bytes\.fromhex', code) and re.search(r'\^\s*\(\d+\s*\^', code))
+                has_sm     = bool(re.search(r'while \w+ != \d+:', code))
+                has_wrap   = bool(re.search(r'def \w+\s*\(\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)\s*:', code))
+                has_exec   = bool(re.search(r'exec\s*\(', code))
+                has_b64bl  = bool(re.search(r"b'[A-Za-z0-9+/=]{200,}'", code))
+
+                lines_det = [
+                    f"🔬 Анализ: {doc.file_name}\n",
+                    f"──────────────────────\n",
+                    f"📄 Строк: {lines_in}  |  Символов: {chars_in:,}\n",
+                    f"──────────────────────\n",
+                ]
+                if method_v1:
+                    lines_det.append(f"✅ v1 метод: {method_v1}\n")
+                    lines_det.append(f"→ Используй /deobf для расшифровки\n")
                 else:
-                    bot.edit_message_text(
-                        "Обфускация не обнаружена\n\nФайл чистый или метод неизвестен",
-                        msg.chat.id, wait.message_id)
+                    lines_det.append(f"❌ v1 паттерн: не обнаружен\n")
+
+                lines_det.append(f"\n🔎 Признаки v2 (Ренди 2.0):\n")
+                lines_det.append(f"  XOR строки:     {'✅ да' if has_xor else '❌ нет'}\n")
+                lines_det.append(f"  State-machine:  {'✅ да' if has_sm else '❌ нет'}\n")
+                lines_det.append(f"  Call-wrappers:  {'✅ да' if has_wrap else '❌ нет'}\n")
+                lines_det.append(f"  exec() вызовы: {'✅ да' if has_exec else '❌ нет'}\n")
+                lines_det.append(f"  Base64 блоки:   {'✅ да' if has_b64bl else '❌ нет'}\n")
+
+                v2_score = sum([has_xor, has_sm, has_wrap, has_exec, has_b64bl])
+                if v2_score >= 2:
+                    lines_det.append(f"\n🟡 Вероятно нужен v2 (Ренди 2.0)\n")
+                    lines_det.append(f"→ Используй /deobf2\n")
+                elif not method_v1:
+                    lines_det.append(f"\n⚪ Обфускация не распознана\n")
+                    lines_det.append(f"   Файл чист или метод неизвестен\n")
+
+                bot.edit_message_text("".join(lines_det), msg.chat.id, wait.message_id)
                 return
 
-            # ── Ренди 2.0 (v2) ──
+            # ══════════════════════════════════════
+            # РЕЖИМ: Ренди 2.0 (v2 принудительно)
+            # ══════════════════════════════════════
             if state == "waiting_v2":
                 bot.edit_message_text(
-                    "🔓 Ренди 2.0 — обрабатываю...\n\n"
-                    "Слои: binary → XOR → wrappers → state-machine → cleanup",
+                    f"🔓 Ренди 2.0 — обрабатываю...\n\n"
+                    f"📄 Файл: {doc.file_name}\n"
+                    f"📊 Строк: {lines_in} | Символов: {chars_in:,}\n\n"
+                    f"⏳ Этапы:\n"
+                    f"  1. Binary payload extraction\n"
+                    f"  2. XOR string decoding\n"
+                    f"  3. Call-wrapper simplification\n"
+                    f"  4. State-machine removal\n"
+                    f"  5. Dummy variable removal\n"
+                    f"  6. getattr() simplification\n"
+                    f"  7. Final cleanup\n",
                     msg.chat.id, wait.message_id)
                 try:
                     result = rendy2_deobfuscate(code)
@@ -1256,92 +1291,183 @@ def handle_document(msg):
                     out_path = f"/tmp/{out_name}"
                     with open(out_path, "w", encoding="utf-8") as f:
                         f.write(result)
-                    lines_in  = code.count('\n')
-                    lines_out = result.count('\n')
-                    reduction = round(100 * (1 - lines_out / max(lines_in, 1)))
+                    lines_out = result.count('\n') + 1
+                    chars_out = len(result)
+                    reduction_l = round(100 * (1 - lines_out / max(lines_in, 1)))
+                    reduction_c = round(100 * (1 - chars_out / max(chars_in, 1)))
                     bot.edit_message_text(
-                        f"✅ Ренди 2.0 готово!\n\n"
-                        f"Строк: {lines_in} → {lines_out} ({reduction}% reduction)\n"
-                        f"Символов: {len(code):,} → {len(result):,}",
+                        f"✅ Ренди 2.0 — готово! 🌸\n\n"
+                        f"📄 Файл: {doc.file_name}\n"
+                        f"──────────────────────\n"
+                        f"📊 Строк:    {lines_in:,} → {lines_out:,}  ({reduction_l}% меньше)\n"
+                        f"💬 Символов: {chars_in:,} → {chars_out:,}  ({reduction_c}% меньше)\n"
+                        f"──────────────────────\n"
+                        f"Метод: Universal (7 слоёв)\n",
                         msg.chat.id, wait.message_id)
                     with open(out_path, "rb") as f:
                         bot.send_document(msg.chat.id, f, visible_file_name=out_name,
-                            caption=f"Ренди 2.0 | {lines_in}→{lines_out} строк")
+                            caption=(
+                                f"🔓 Ренди 2.0 | {doc.file_name}\n"
+                                f"Строк: {lines_in}→{lines_out} ({reduction_l}%↓) | "
+                                f"Символов: {chars_in:,}→{chars_out:,} ({reduction_c}%↓)"
+                            ))
                     try:
                         os.remove(out_path)
                     except:
                         pass
                 except Exception as e:
-                    bot.edit_message_text(f"Ошибка Ренди 2.0: {e}", msg.chat.id, wait.message_id)
+                    import traceback
+                    tb = traceback.format_exc()
+                    print(f"[deobf v2] ERR:\n{tb}")
+                    bot.edit_message_text(
+                        f"❌ Ошибка Ренди 2.0:\n{e}\n\nФайл: {doc.file_name}",
+                        msg.chat.id, wait.message_id)
                 return
 
-            # ── v1 полная деобфускация ──
-            method = detect_obfuscation(code)
-            if not method:
-                bot.edit_message_text(
-                    "Обфускация не обнаружена\n\nФайл уже чистый или метод неизвестен\n\n"
-                    "Попробуй Деобфускатор v2 (/deobf2) для сложных случаев",
-                    msg.chat.id, wait.message_id)
-                return
+            # ══════════════════════════════════════
+            # РЕЖИМ: АВТО или v1 — пробуем v1,
+            #        если не вышло — авто v2
+            # ══════════════════════════════════════
+            is_auto = (state == "waiting_auto")
 
+            # Шаг 1: определяем v1
             bot.edit_message_text(
-                f"Обнаружена: {method}\nДекодирую...",
+                f"🔍 {'[АВТО] ' if is_auto else ''}Анализирую {doc.file_name}...\n\n"
+                f"📊 Строк: {lines_in} | Символов: {chars_in:,}\n\n"
+                f"⏳ Шаг 1/2: определяю метод обфускации...",
                 msg.chat.id, wait.message_id)
 
-            result, info = deobfuscate_code(code)
+            method_v1 = detect_obfuscation(code)
 
-            if result:
-                out_name = f"decoded_{doc.file_name}"
+            # Шаг 2а: v1 нашёл — декодируем v1
+            if method_v1:
+                bot.edit_message_text(
+                    f"🔍 {'[АВТО] ' if is_auto else ''}Анализирую {doc.file_name}...\n\n"
+                    f"✅ Метод: {method_v1}\n\n"
+                    f"⏳ Шаг 2/2: декодирую...",
+                    msg.chat.id, wait.message_id)
+
+                result, info = deobfuscate_code(code)
+
+                if result:
+                    out_name = f"decoded_{doc.file_name}"
+                    out_path = f"/tmp/{out_name}"
+                    with open(out_path, "w", encoding="utf-8") as f:
+                        f.write(result)
+                    lines_out = result.count('\n') + 1
+                    chars_out = len(result)
+                    reduction_l = round(100 * (1 - lines_out / max(lines_in, 1)))
+                    reduction_c = round(100 * (1 - chars_out / max(chars_in, 1)))
+                    bot.edit_message_text(
+                        f"✅ Декодировано (v1)! 🌸\n\n"
+                        f"📄 Файл: {doc.file_name}\n"
+                        f"──────────────────────\n"
+                        f"🔑 Метод:    {info}\n"
+                        f"📊 Строк:    {lines_in:,} → {lines_out:,}  ({reduction_l}% меньше)\n"
+                        f"💬 Символов: {chars_in:,} → {chars_out:,}  ({reduction_c}% меньше)\n"
+                        f"──────────────────────",
+                        msg.chat.id, wait.message_id)
+                    with open(out_path, "rb") as f:
+                        bot.send_document(msg.chat.id, f, visible_file_name=out_name,
+                            caption=(
+                                f"🔓 v1 | Метод: {info}\n"
+                                f"Строк: {lines_in}→{lines_out} ({reduction_l}%↓)"
+                            ))
+                    try:
+                        os.remove(out_path)
+                    except:
+                        pass
+                    return
+
+                # v1 метод найден, но декодировать не вышло — fallback на v2 если авто
+                if is_auto:
+                    bot.edit_message_text(
+                        f"⚠️ [АВТО] v1 ({method_v1}) не смог декодировать.\n\n"
+                        f"🔄 Переключаюсь на Ренди 2.0...",
+                        msg.chat.id, wait.message_id)
+                else:
+                    bot.edit_message_text(
+                        f"❌ v1 не смог декодировать: {info}\n\n"
+                        f"Попробуй /deobf2 (Ренди 2.0) для этого файла~",
+                        msg.chat.id, wait.message_id)
+                    return
+
+            elif not is_auto:
+                # v1 не нашёл паттерн и не авто-режим
+                bot.edit_message_text(
+                    f"❌ v1: обфускация не распознана\n\n"
+                    f"Файл: {doc.file_name}\n\n"
+                    f"Попробуй /deobf2 (Ренди 2.0) — он умеет больше~",
+                    msg.chat.id, wait.message_id)
+                return
+            else:
+                bot.edit_message_text(
+                    f"🔄 [АВТО] v1 паттерн не найден.\n\n"
+                    f"⏳ Запускаю Ренди 2.0 (universal)...",
+                    msg.chat.id, wait.message_id)
+
+            # ── АВТО-ФОЛЛБЭК: запускаем Ренди 2.0 ──
+            bot.edit_message_text(
+                f"🔓 [АВТО → Ренди 2.0] Обрабатываю...\n\n"
+                f"📄 Файл: {doc.file_name}\n"
+                f"📊 Строк: {lines_in:,} | Символов: {chars_in:,}\n\n"
+                f"⏳ Этапы:\n"
+                f"  1. Binary payload extraction\n"
+                f"  2. XOR string decoding\n"
+                f"  3. Call-wrapper simplification\n"
+                f"  4. State-machine removal\n"
+                f"  5. Dummy variable removal\n"
+                f"  6. getattr() simplification\n"
+                f"  7. Final cleanup\n",
+                msg.chat.id, wait.message_id)
+
+            try:
+                result = rendy2_deobfuscate(code)
+                out_name = f"auto_rendy2_{doc.file_name}"
                 out_path = f"/tmp/{out_name}"
                 with open(out_path, "w", encoding="utf-8") as f:
                     f.write(result)
+                lines_out = result.count('\n') + 1
+                chars_out = len(result)
+                reduction_l = round(100 * (1 - lines_out / max(lines_in, 1)))
+                reduction_c = round(100 * (1 - chars_out / max(chars_in, 1)))
                 bot.edit_message_text(
-                    f"✅ Готово! Метод: {info}",
+                    f"✅ [АВТО → Ренди 2.0] Готово! 🌸\n\n"
+                    f"📄 Файл: {doc.file_name}\n"
+                    f"──────────────────────\n"
+                    f"🔑 Метод:    v1 не подошёл → Ренди 2.0 (7 слоёв)\n"
+                    f"📊 Строк:    {lines_in:,} → {lines_out:,}  ({reduction_l}% меньше)\n"
+                    f"💬 Символов: {chars_in:,} → {chars_out:,}  ({reduction_c}% меньше)\n"
+                    f"──────────────────────",
                     msg.chat.id, wait.message_id)
                 with open(out_path, "rb") as f:
                     bot.send_document(msg.chat.id, f, visible_file_name=out_name,
-                        caption=f"Decoded | Метод: {info}")
+                        caption=(
+                            f"🔓 АВТО | Ренди 2.0\n"
+                            f"Строк: {lines_in}→{lines_out} ({reduction_l}%↓) | "
+                            f"Символов: {chars_in:,}→{chars_out:,} ({reduction_c}%↓)"
+                        ))
                 try:
                     os.remove(out_path)
                 except:
                     pass
-            else:
+            except Exception as e:
+                import traceback
+                tb = traceback.format_exc()
+                print(f"[deobf auto-v2] ERR:\n{tb}")
                 bot.edit_message_text(
-                    f"Не удалось v1: {info}\n\nПопробуй /deobf2 (Ренди 2.0)~",
+                    f"❌ Ренди 2.0 ошибка:\n{e}\n\nФайл: {doc.file_name}",
                     msg.chat.id, wait.message_id)
 
         except Exception as e:
             import traceback
             print(f"[deobf] ERR: {traceback.format_exc()}")
             try:
-                bot.edit_message_text(f"Ошибка: {e}", msg.chat.id, wait.message_id)
+                bot.edit_message_text(f"Ошибка обработки: {e}", msg.chat.id, wait.message_id)
             except:
                 pass
 
     threading.Thread(target=do, daemon=True).start()
-
-# ═══════════════════════════════════════
-#       /vless — VLESS/Reality ссылки
-# ═══════════════════════════════════════
-@bot.message_handler(commands=["vless"])
-@access_required
-def cmd_vless(msg):
-    if not MY_VLESS_PROXIES:
-        _send(msg.chat.id, "Нет VLESS серверов~")
-        return
-    chunk_size = 5
-    total = len(MY_VLESS_PROXIES)
-    header = (
-        f"VLESS / XTLS-Reality серверы ({total} шт)\n\n"
-        f"Вставляй в v2rayNG / Hiddify / Nekoray / Streisand\n"
-        f"─────────────────────\n\n"
-    )
-    first = True
-    for i in range(0, total, chunk_size):
-        chunk = MY_VLESS_PROXIES[i:i+chunk_size]
-        text = (header if first else "") + "\n".join(chunk)
-        first = False
-        bot.send_message(msg.chat.id, text)
 
 # ═══════════════════════════════════════
 #         /pick — ручной выбор прокси
@@ -1918,7 +2044,7 @@ def on_callback(call):
     cid = call.message.chat.id
     mid = call.message.message_id
 
-    # ─ Деобфускатор v1 ──────────────────
+    # ─ Деобфускатор (меню) ──────────────
     if d == "deobf_menu":
         if not is_allowed(uid):
             bot.answer_callback_query(call.id, "🔒")
@@ -1926,15 +2052,32 @@ def on_callback(call):
         bot.answer_callback_query(call.id)
         try:
             bot.edit_message_text(
-                "🔓 Деобфускатор v1 🌸\n\n"
-                "Поддерживаемые методы:\n"
-                "• base64/32/16 · zlib · gzip · lzma\n"
-                "• Комбо: base+zlib/gzip/lzma\n"
-                "• Rendy obf (marshal+gzip+lzma+zlib+base64)\n\n"
-                "Выбери действие:",
+                "🔓 Деобфускатор 🌸\n\n"
+                "⚡ АВТО — пробует v1, при неудаче сразу v2\n\n"
+                "v1 методы:\n"
+                "  • base64/32/16 · zlib · gzip · lzma\n"
+                "  • Комбо: base+zlib/gzip/lzma\n"
+                "  • Rendy obf (marshal+gzip+lzma+zlib+base64)\n\n"
+                "v2 (Ренди 2.0):\n"
+                "  • XOR строки · State-machine\n"
+                "  • Call-wrappers · Dummy vars\n"
+                "  • getattr chains · Binary payload\n\n"
+                "Выбери режим:",
                 cid, mid, reply_markup=kb_deobf())
         except:
-            _send(cid, "🔓 Деобфускатор v1", kb_deobf())
+            _send(cid, "🔓 Деобфускатор", kb_deobf())
+        return
+
+    if d == "deobf_auto":
+        if not is_allowed(uid):
+            bot.answer_callback_query(call.id, "🔒")
+            return
+        bot.answer_callback_query(call.id)
+        _deobf_state[uid] = "waiting_auto"
+        _edit(cid, mid,
+            "⚡ АВТО-деобфускатор активирован 🌸\n\n"
+            "Порядок: v1 (base/zlib/rendy) → если не вышло → Ренди 2.0\n\n"
+            "📎 Отправь .py файл:")
         return
 
     if d == "deobf_detect":
