@@ -7,7 +7,7 @@
 ╚═════╝ ╚══════╝ ╚═════╝ ╚═════╝ ╚═╝         ╚═════╝  ╚═════╝   ╚═╝
 
   Python Deobfuscator - sicksilent edition
-  Version 3.0 OMEGA — 50+ decode techniques
+  Version 3.1 OMEGA — 50+ decode techniques + MULTI-PASS
 
   pip install pyTelegramBotAPI
   python3 mega_deobf_bot.py
@@ -27,19 +27,15 @@ TOKEN     = "8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30"
 ADMIN_IDS = {7321093872}
 ADMIN_USERNAME = "@ArrhythmiaFucks"
 
-# ── Подписка на канал ──────────────────────────────────────────
-# Канал приватный — проверка по invite-link через Bot API недоступна.
-# Схема: пользователь нажимает "[+] Я подписался" → бот отправляет
-# заявку админу, тот выдаёт доступ через /add ID
 CHANNEL_LINK = "https://t.me/+p5w4sYOREc0zZTRi"
-CHANNEL_ID   = None   # Если публичный — "@channel_username"
+CHANNEL_ID   = None
 
 USERS_FILE  = "allowed_users.json"
 BANNED_FILE = "banned_users.json"
 
 WELCOME_PHOTO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "astolfo.png")
 
-BOT_VERSION = "3.0 OMEGA"
+BOT_VERSION = "3.1 OMEGA"
 BOT_NAME    = "[!] SICKSILENT DEOBF"
 
 # ══════════════════════════════════════════════════════════════
@@ -93,7 +89,6 @@ def access_required(fn):
         if not is_allowed(uid):
             name = msg.from_user.first_name or "анон"
             uname = getattr(msg.from_user, "username", "") or ""
-            # Сохраняем заявку
             pending_subscribe[uid] = {
                 "name": name, "username": uname, "ts": ts()
             }
@@ -122,19 +117,11 @@ def ts():
 bot = telebot.TeleBot(TOKEN, parse_mode=None)
 
 # ══════════════════════════════════════════════════════════════
-#
-#   ██╗   ██╗ ██╗     ██████╗ ███████╗ ██████╗  ██████╗
-#   ██║   ██║███║     ██╔══██╗██╔════╝██╔════╝ ██╔═══██╗
-#   ██║   ██║╚██║     ██║  ██║█████╗  ██║      ██║   ██║
-#   ╚██╗ ██╔╝ ██║     ██║  ██║██╔══╝  ██║      ██║   ██║
-#    ╚████╔╝  ██║     ██████╔╝███████╗╚██████╗ ╚██████╔╝
-#     ╚═══╝   ╚═╝     ╚═════╝ ╚══════╝ ╚═════╝  ╚═════╝
-#
-#   lambda + exec обфускации (base64/32/16 + zlib/gzip/lzma/marshal)
+#   V1 ДЕКОДЕР (lambda+exec обфускации)
 # ══════════════════════════════════════════════════════════════
 
 _exec_pattern = r"""exec\(\s*\(?\s*_+\s*\)?\s*\(\s*b['"]([\s\S]+?)['"]\s*\)\s*\)"""
-_deobf_note   = "# DECODED BY @ArrhythmiaFucks | sicksilent deobf OMEGA v3.0\n\n"
+_deobf_note   = "# DECODED BY @ArrhythmiaFucks | sicksilent deobf OMEGA v3.1\n\n"
 
 _obfuscation_patterns = {
     r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\s*;": "base64",
@@ -311,15 +298,7 @@ def deobfuscate_code(code):
 
 
 # ══════════════════════════════════════════════════════════════
-#
-#   ██╗   ██╗██████╗     ██████╗ ███████╗ ██████╗ ██████╗ ███████╗
-#   ██║   ██╚════██╗    ██╔══██╗██╔════╝██╔════╝██╔═══██╗██╔════╝
-#   ██║   ██║ █████╔╝   ██║  ██║█████╗  ██║     ██║   ██║███████╗
-#   ╚██╗ ██╔╝██╔═══╝    ██║  ██║██╔══╝  ██║     ██║   ██║╚════██║
-#    ╚████╔╝ ███████╗   ██████╔╝███████╗╚██████╗╚██████╔╝███████║
-#     ╚═══╝  ╚══════╝   ╚═════╝ ╚══════╝ ╚═════╝ ╚═════╝ ╚══════╝
-#
-#   Ренди 2.0 — Universal Python Deobfuscator — 30+ техник
+#   V2 — РЕНДИ 2.0 UNIVERSAL
 # ══════════════════════════════════════════════════════════════
 
 XOR_ADJ = 2
@@ -843,15 +822,7 @@ def rendy2_deobfuscate(source, xor_adj=2):
 
 
 # ══════════════════════════════════════════════════════════════
-#
-#   ██╗   ██╗██████╗     ███████╗████████╗██████╗ ██╗███╗   ██╗ ██████╗
-#   ██║   ██╚════██╗    ██╔════╝╚══██╔══╝██╔══██╗██║████╗  ██║██╔════╝
-#   ██║   ██║ █████╔╝   ███████╗   ██║   ██████╔╝██║██╔██╗ ██║██║  ███╗
-#   ╚██╗ ██╔╝██╔═══╝    ╚════██║   ██║   ██╔══██╗██║██║╚██╗██║██║   ██║
-#    ╚████╔╝ ███████╗   ███████║   ██║   ██║  ██║██║██║ ╚████║╚██████╔╝
-#     ╚═══╝  ╚══════╝   ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝ ╚═════╝
-#
-#   Строковые методы (MBA/chr/hex/ROT13/...) + EXE Binary Unpacker
+#   V3 — СТРОКОВЫЕ МЕТОДЫ + EXE UNPACKER
 # ══════════════════════════════════════════════════════════════
 
 PYINSTALLER_MAGIC     = b'MEI\x0c\x0b\x0a\x0b\x0e'
@@ -876,11 +847,6 @@ def v3_detect_format(data):
 def v3_extract_pyinstaller(data):
     results = {}
     try:
-        magic_pos = data.rfind(b'MEI\x0c\x0b\x0a\x0b\x0e')
-        if magic_pos != -1:
-            pkg_start = magic_pos - 8
-    except: pass
-    try:
         zip_start = data.rfind(b'PK\x03\x04')
         if zip_start == -1: zip_start = data.find(b'PK\x03\x04')
         if zip_start != -1:
@@ -903,14 +869,6 @@ def v3_decompile_pyc(data):
         try: code_obj = marshal.loads(data[hsize:]); break
         except: pass
     if code_obj is None: return "# Не удалось прочитать .pyc\n"
-    for pkg in ['decompyle3', 'uncompyle6']:
-        try:
-            mod = __import__(pkg); buf = io.StringIO()
-            if hasattr(mod, 'decompile_code'): mod.decompile_code(code_obj, buf)
-            elif hasattr(mod, 'decompile'): mod.decompile(code_obj, buf)
-            result = buf.getvalue()
-            if result and len(result) > 20: return result
-        except: pass
     buf = io.StringIO()
     try:
         dis.dis(code_obj, file=buf)
@@ -1103,175 +1061,61 @@ def v3_deobfuscate_binary(data, filename):
 
 
 # ══════════════════════════════════════════════════════════════
-#
-#   ██╗   ██╗██╗  ██╗    ███╗   ██╗███████╗██╗    ██╗
-#   ██║   ██║██║  ██║    ████╗  ██║██╔════╝██║    ██║
-#   ██║   ██║███████║    ██╔██╗ ██║█████╗  ██║ █╗ ██║
-#   ╚██╗ ██╔╝╚════██║    ██║╚██╗██║██╔══╝  ██║███╗██║
-#    ╚████╔╝      ██║    ██║ ╚████║███████╗╚███╔███╔╝
-#     ╚═══╝       ╚═╝    ╚═╝  ╚═══╝╚══════╝ ╚══╝╚══╝
-#
-#   НОВЫЕ ЭКСКЛЮЗИВНЫЕ МЕТОДЫ ДЕКОДИРОВАНИЯ
+#   V4 — OMEGA EXCLUSIVE METHODS
 # ══════════════════════════════════════════════════════════════
 
-# ── N1: String Substitution Cipher (custom alphabet mapping) ──
+def v4_decode_utf8_calls(source: str) -> str:
+    prev = None; passes = 0
+    while prev != source and passes < 15:
+        prev = source; passes += 1
+        source = re.sub(
+            r"'([^'\\]*)'\s*\(\s*'(?:utf-8|utf8|ascii|latin-1|cp1251|utf_8)'\s*\)",
+            lambda m: f"'{m.group(1)}'", source)
+        source = re.sub(
+            r'"([^"\\]*)"\s*\(\s*"(?:utf-8|utf8|ascii|latin-1|cp1251|utf_8)"\s*\)',
+            lambda m: f'"{m.group(1)}"', source)
+        source = re.sub(r"(b'[^']*')\s*\(\s*'[^']*'\s*\)", lambda m: m.group(1), source)
+        source = re.sub(r'(b"[^"]*")\s*\(\s*"[^"]*"\s*\)', lambda m: m.group(1), source)
+    return source
+
 def v4_decode_substitution(source: str) -> str:
-    """
-    Декодирует custom alphabet substitution:
-    translate_table = str.maketrans('abc...', 'xyz...')
-    encoded.translate(translate_table)
-    """
-    def repl(m):
-        try:
-            from_chars = m.group(1); to_chars = m.group(2)
-            table = str.maketrans(from_chars, to_chars)
-            # Ищем .translate() вызовы после этого
-            return m.group(0)  # просто отмечаем
-        except: return m.group(0)
-    # Упрощаем вызовы translate с константами
     source = re.sub(
         r"'([^']+)'\s*\.\s*translate\s*\(\s*str\.maketrans\s*\(\s*'([^']+)'\s*,\s*'([^']+)'\s*\)\s*\)",
-        lambda m: repr(m.group(1).translate(str.maketrans(m.group(2), m.group(3)))),
-        source)
+        lambda m: repr(m.group(1).translate(str.maketrans(m.group(2), m.group(3)))), source)
     return source
 
-# ── N2: AES-like XOR multi-byte key ──────────────────────────
-def v4_decode_multibyte_xor(source: str) -> str:
-    """
-    Декодирует многобайтовый XOR:
-    key = b'\x12\x34\x56\x78'
-    enc = bytes([b ^ key[i % len(key)] for i, b in enumerate(data)])
-    """
-    def repl(m):
-        try:
-            hex_data = m.group(1)
-            key_hex  = m.group(2)
-            data     = bytes.fromhex(hex_data)
-            key      = bytes.fromhex(key_hex)
-            if not key: return m.group(0)
-            result = bytes([b ^ key[i % len(key)] for i, b in enumerate(data)])
-            try: return repr(result.decode('utf-8'))
-            except: return repr(result.hex())
-        except: return m.group(0)
-    source = re.sub(
-        r"bytes\s*\(\s*\[\s*b\s*\^\s*key\s*\[\s*i\s*%\s*len\s*\(\s*key\s*\)\s*\]\s*for\s+i\s*,\s*b\s+in\s+enumerate\s*\(\s*bytes\.fromhex\s*\(['\"]([0-9a-fA-F]+)['\"]\)\s*\)\s*\]\s*\)",
-        lambda m: m.group(0), source)  # placeholder for actual pattern
-    return source
-
-# ── N3: Decimal/Octal/Binary string encode ───────────────────
 def v4_decode_numeral_strings(source: str) -> str:
-    """
-    Декодирует числовые форматы:
-    bytes([104, 101, 108, 108, 111]) → 'hello'
-    ''.join([chr(0o150), chr(0o145)...]) → 'he...'
-    ''.join([chr(0b1101000)...]) → 'h...'
-    """
-    # Decimal list → string
     source = re.sub(
         r"bytes\s*\(\s*\[([0-9,\s]+)\]\s*\)(?:\.decode\s*\([^)]*\))?",
-        lambda m: repr(bytes([int(x.strip()) for x in m.group(1).split(',') if x.strip()]).decode('utf-8', errors='replace')),
-        source)
-    # chr(0o...) octal concat
+        lambda m: repr(bytes([int(x.strip()) for x in m.group(1).split(',') if x.strip()]).decode('utf-8', errors='replace')), source)
     source = re.sub(
         r"(?:chr\s*\(\s*0o[0-7]+\s*\)\s*\+\s*)+chr\s*\(\s*0o[0-7]+\s*\)",
-        lambda m: repr(''.join(chr(int(x, 8)) for x in re.findall(r'0o([0-7]+)', m.group(0)))),
-        source)
-    # chr(0b...) binary concat
+        lambda m: repr(''.join(chr(int(x, 8)) for x in re.findall(r'0o([0-7]+)', m.group(0)))), source)
     source = re.sub(
         r"(?:chr\s*\(\s*0b[01]+\s*\)\s*\+\s*)+chr\s*\(\s*0b[01]+\s*\)",
-        lambda m: repr(''.join(chr(int(x, 2)) for x in re.findall(r'0b([01]+)', m.group(0)))),
-        source)
+        lambda m: repr(''.join(chr(int(x, 2)) for x in re.findall(r'0b([01]+)', m.group(0)))), source)
     return source
 
-# ── N4: String split + join obfuscation ──────────────────────
 def v4_decode_split_reassemble(source: str) -> str:
-    """
-    Декодирует 'hXeXlXlXo'.replace('X', '') или split join трюки:
-    'h_e_l_l_o'.replace('_', '') → 'hello'
-    ('hel' + 'lo') → 'hello'
-    """
-    # .replace с пустой строкой (убираем разделитель)
     def repl_replace(m):
-        try:
-            s = m.group(1); sep = m.group(2)
-            return repr(s.replace(sep, ''))
+        try: return repr(m.group(1).replace(m.group(2), ''))
         except: return m.group(0)
-    source = re.sub(
-        r"'([^']+)'\s*\.\s*replace\s*\(\s*'([^']+)'\s*,\s*''\s*\)",
-        repl_replace, source)
-    source = re.sub(
-        r'"([^"]+)"\s*\.\s*replace\s*\(\s*"([^"]+)"\s*,\s*""\s*\)',
+    source = re.sub(r"'([^']+)'\s*\.\s*replace\s*\(\s*'([^']+)'\s*,\s*''\s*\)", repl_replace, source)
+    source = re.sub(r'"([^"]+)"\s*\.\s*replace\s*\(\s*"([^"]+)"\s*,\s*""\s*\)',
         lambda m: repr(m.group(1).replace(m.group(2), '')), source)
-    # Строки конкатенации ('hel' + 'lo' + ' ' + 'world') → 'hello world'
     def repl_concat(m):
         try:
             parts = re.findall(r"'([^']*)'|\"([^\"]*)\"", m.group(0))
-            result = ''.join(a or b for a, b in parts)
-            return repr(result)
+            result = ''.join(a or b for a, b in parts); return repr(result)
         except: return m.group(0)
-    source = re.sub(
-        r"(?:'[^']*'|\"[^\"]*\")\s*(?:\+\s*(?:'[^']*'|\"[^\"]*\")\s*){2,}",
-        repl_concat, source)
+    source = re.sub(r"(?:'[^']*'|\"[^\"]*\")\s*(?:\+\s*(?:'[^']*'|\"[^\"]*\")\s*){2,}", repl_concat, source)
     return source
 
-# ── N5: Base58 / Base85 / Base91 decode ──────────────────────
-BASE58_ALPHABET = b'123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
-
-def v4_base58_decode(s: str) -> bytes:
-    alphabet = BASE58_ALPHABET
-    n = 0; alphabet_map = {c: i for i, c in enumerate(alphabet)}
-    for char in s.encode():
-        n = n * 58 + alphabet_map.get(char, 0)
-    result = []
-    while n > 0: result.append(n % 256); n //= 256
-    padding = len(s) - len(s.lstrip(chr(alphabet[0])))
-    return bytes([0] * padding + result[::-1])
-
-def v4_decode_exotic_bases(source: str) -> str:
-    """Декодирует base58, base85, base91 строки."""
-    # Base85
-    def repl_b85(m):
-        try: return repr(base64.b85decode(m.group(1)).decode('utf-8', errors='replace'))
-        except: return m.group(0)
-    source = re.sub(r"base64\.b85decode\s*\(\s*b?['\"]([^'\"]+)['\"]\s*\)", repl_b85, source)
-    # Base32 стандарт
-    def repl_b32(m):
-        try:
-            padded = m.group(1) + '=' * ((-len(m.group(1))) % 8)
-            return repr(base64.b32decode(padded).decode('utf-8', errors='replace'))
-        except: return m.group(0)
-    source = re.sub(r"base64\.b32decode\s*\(\s*b?['\"]([A-Z2-7=]+)['\"]\s*\)", repl_b32, source)
-    return source
-
-# ── N6: String interleaving / shuffling ──────────────────────
-def v4_decode_interleaved(source: str) -> str:
-    """
-    Декодирует перемешанные строки:
-    ''.join(s[i] for i in [3,1,4,1,5,9,2,6]) → оригинал по индексам
-    s[::2] + s[1::2] → соединение чётных/нечётных
-    """
-    # s[::N] slice decode
-    source = re.sub(
-        r"'([^']{4,})'\s*\[\s*::\s*2\s*\]\s*\+\s*'([^']{4,})'\s*\[\s*1\s*::\s*2\s*\]",
-        lambda m: repr(''.join(a+b for a, b in zip(m.group(1), m.group(2)))),
-        source)
-    return source
-
-# ── N7: Bitwise NOT / shift obfuscation ──────────────────────
 def v4_decode_bitwise_obf(source: str) -> str:
-    """
-    Декодирует bitwise обфускацию:
-    ~(~x) → x
-    x >> 0 → x
-    x << 0 → x
-    x | 0  → x
-    x & 0xFFFF... → x (если x в диапазоне)
-    """
     source = re.sub(r'~~(\w+)', lambda m: m.group(1), source)
     source = re.sub(r'(\w+)\s*>>\s*0(?!\d)', lambda m: m.group(1), source)
     source = re.sub(r'(\w+)\s*<<\s*0(?!\d)', lambda m: m.group(1), source)
     source = re.sub(r'(\w+)\s*\|\s*0(?!\d)', lambda m: m.group(1), source)
-    # Константные bitwise выражения
     def eval_bitwise(m):
         try:
             v = eval(m.group(0))
@@ -1281,24 +1125,7 @@ def v4_decode_bitwise_obf(source: str) -> str:
     source = re.sub(r'\d+\s*(?:[|&^]|>>|<<)\s*\d+', eval_bitwise, source)
     return source
 
-# ── N8: Ord/char table obfuscation ───────────────────────────
 def v4_decode_ord_table(source: str) -> str:
-    """
-    Декодирует ord-таблицы:
-    ''.join(chr(x-1) for x in [105, 110, 101]) → 'hmd'
-    ''.join(chr(x^key) for x in [list]) → decoded
-    """
-    def repl_shift(m):
-        try:
-            nums = [int(x.strip()) for x in m.group(2).split(',') if x.strip()]
-            shift = int(m.group(1))
-            return repr(''.join(chr(n + shift) for n in nums))
-        except: return m.group(0)
-    source = re.sub(
-        r"''\s*\.\s*join\s*\(\s*chr\s*\(\s*x\s*([+\-]\s*\d+)\s*\)\s*for\s+x\s+in\s*\[([0-9,\s]+)\]\s*\)",
-        lambda m: repr(''.join(chr(int(x.strip()) + int(m.group(1).replace(' ', ''))) for x in m.group(2).split(',') if x.strip())),
-        source)
-    # chr(x^key) for x in [list]
     def repl_xor_list(m):
         try:
             key  = int(m.group(1))
@@ -1310,50 +1137,19 @@ def v4_decode_ord_table(source: str) -> str:
         repl_xor_list, source)
     return source
 
-# ── N9: String format obfuscation ────────────────────────────
 def v4_decode_format_obf(source: str) -> str:
-    """
-    Декодирует форматирование строк как обфускацию:
-    '%s%s%s' % ('imp', 'or', 't') → 'import'
-    '{0}{1}{2}'.format('im', 'po', 'rt') → 'import'
-    """
-    # '%s' % ('parts',) concat
-    def repl_percent(m):
-        try:
-            fmt = m.group(1); parts_str = m.group(2)
-            parts = re.findall(r"'([^']*)'|\"([^\"]*)\"", parts_str)
-            vals = [a or b for a, b in parts]
-            placeholders = re.findall(r'%[sd]', fmt)
-            if len(placeholders) == len(vals): return repr(fmt % tuple(vals))
-        except: pass
-        return m.group(0)
-    source = re.sub(
-        r"'([^']*(?:%[sd][^']*)+)'\s*%\s*\(([^)]+)\)",
-        repl_percent, source)
-    # '{0}{1}...'.format(parts) literal
     def repl_format(m):
         try:
             fmt_str = m.group(1); args_str = m.group(2)
             args = re.findall(r"'([^']*)'|\"([^\"]*)\"", args_str)
             vals = [a or b for a, b in args]
-            result = fmt_str.format(*vals)
-            return repr(result)
+            result = fmt_str.format(*vals); return repr(result)
         except: return m.group(0)
-    source = re.sub(
-        r"'((?:\{[0-9]*\})+)'\s*\.\s*format\s*\(([^)]+)\)",
-        repl_format, source)
+    source = re.sub(r"'((?:\{[0-9]*\})+)'\s*\.\s*format\s*\(([^)]+)\)", repl_format, source)
     return source
 
-# ── N10: AST-based constant folding ──────────────────────────
 def v4_ast_constant_fold(source: str) -> str:
-    """
-    Раскрывает константные AST-выражения:
-    True and True → True
-    1 + 2 + 3 → 6
-    'a' * 3 → 'aaa'
-    """
     def try_safe_eval(expr: str):
-        # Только безопасные операции
         safe_nodes = (ast.Constant, ast.BinOp, ast.UnaryOp, ast.BoolOp,
                       ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod,
                       ast.Pow, ast.FloorDiv, ast.BitOr, ast.BitAnd,
@@ -1364,99 +1160,26 @@ def v4_ast_constant_fold(source: str) -> str:
             for node in ast.walk(tree):
                 if not isinstance(node, safe_nodes): return None
             v = eval(compile(tree, '<string>', 'eval'))
-            if isinstance(v, (int, float, str, bool, bytes)) and len(repr(v)) < 200:
-                return repr(v)
+            if isinstance(v, (int, float, str, bool, bytes)) and len(repr(v)) < 200: return repr(v)
         except: pass
         return None
-
     def repl(m):
-        r = try_safe_eval(m.group(0))
-        return r if r else m.group(0)
-    # Числовые выражения в скобках
+        r = try_safe_eval(m.group(0)); return r if r else m.group(0)
     source = re.sub(r'\(\s*\d+\s*[\+\-\*\/\%\^\|\&]+\s*\d+\s*\)', repl, source)
-    # True/False/None boolean folding
     source = re.sub(r'\bTrue\s+and\s+True\b', 'True', source)
     source = re.sub(r'\bFalse\s+or\s+False\b', 'False', source)
-    source = re.sub(r'\bTrue\s+or\s+\w+\b', 'True', source)
-    source = re.sub(r'\bFalse\s+and\s+\w+\b', 'False', source)
     source = re.sub(r'\bnot\s+False\b', 'True', source)
     source = re.sub(r'\bnot\s+True\b', 'False', source)
     return source
 
-# ── N11: Hyperion / Python obfuscator EXE ────────────────────
 def v4_decode_hyperion_style(source: str) -> str:
-    """
-    Hyperion/PyArmor стиль: зашифрованный payload в переменной + exec.
-    pyarmor_runtime() + __pyarmor__(__name__, __file__, b'...', 1)
-    """
-    # Убираем PyArmor runtime calls
     source = re.sub(r'from\s+pytransform\s+import\s+pyarmor_runtime\s*\n', '', source)
     source = re.sub(r'pyarmor_runtime\s*\(\s*\)\s*\n?', '', source)
     source = re.sub(r'__pyarmor__\s*\([^)]*\)\s*\n?', '# [PyArmor protected — runtime decrypt required]\n', source)
-    # Убираем Hyperion-стиль exec(decrypt(...))
     source = re.sub(r"exec\s*\(\s*decrypt\s*\([^)]+\)\s*\)", '# [Hyperion encrypted block]', source)
     return source
 
-# ── N12: Caesar cipher (всех ROT вариантов) ──────────────────
-def v4_decode_caesar_all(source: str) -> str:
-    """
-    Декодирует Caesar/ROT шифры всех вариантов (ROT1-ROT25).
-    Ищет паттерны codecs.decode(s, 'rot_N') или строки с таким смещением.
-    """
-    def rot_n(text: str, n: int) -> str:
-        result = []
-        for c in text:
-            if 'a' <= c <= 'z': result.append(chr((ord(c) - ord('a') + n) % 26 + ord('a')))
-            elif 'A' <= c <= 'Z': result.append(chr((ord(c) - ord('A') + n) % 26 + ord('A')))
-            else: result.append(c)
-        return ''.join(result)
-    # codecs.decode(s, 'rot_13') уже обрабатывается в v3
-    # Добавляем остальные ROT варианты если вдруг встречаются
-    source = re.sub(r"codecs\.decode\s*\(\s*'([^']+)'\s*,\s*'caesar_(\d+)'\s*\)",
-        lambda m: repr(rot_n(m.group(1), int(m.group(2)))), source)
-    return source
-
-# ── N13: String interleave decode (чётные/нечётные символы) ──
-def v4_decode_interleave_chars(source: str) -> str:
-    """
-    Декодирует interleave: первая половина чётные, вторая нечётные:
-    'aAbBcC' → 'abc' + 'ABC' → recombine
-    """
-    def repl(m):
-        try:
-            s = m.group(1)
-            if len(s) % 2 != 0: return m.group(0)
-            half = len(s) // 2
-            evens = s[:half]; odds = s[half:]
-            return repr(''.join(a+b for a, b in zip(evens, odds)))
-        except: return m.group(0)
-    # Помечаем interleaved строки через специальный паттерн
-    return source
-
-# ── N14: Hash-based string obfuscation ───────────────────────
-def v4_decode_hash_strings(source: str) -> str:
-    """
-    Некоторые обфускаторы используют словари hash→string:
-    _strings = {0x1a2b: 'import', 0x3c4d: 'os'}
-    _s(0x1a2b) → 'import'
-    """
-    # Ищем словарь hex → string
-    string_dict = {}
-    for m in re.finditer(r"(0x[0-9a-fA-F]+|0X[0-9A-Fa-f]+)\s*:\s*['\"]([^'\"]+)['\"]", source):
-        string_dict[m.group(1).lower()] = m.group(2)
-    if string_dict:
-        def lookup(m):
-            key = m.group(1).lower()
-            return repr(string_dict[key]) if key in string_dict else m.group(0)
-        source = re.sub(r'_s\s*\(\s*(0x[0-9a-fA-F]+)\s*\)', lookup, source)
-    return source
-
-# ── N15: Zlib + base64 inline (без lambda) ───────────────────
 def v4_decode_zlib_inline(source: str) -> str:
-    """
-    exec(zlib.decompress(base64.b64decode('...')))
-    или exec(__import__('zlib').decompress(base64.b64decode(b'...')))
-    """
     def repl(m):
         try:
             data = base64.b64decode(m.group(1).strip())
@@ -1468,82 +1191,172 @@ def v4_decode_zlib_inline(source: str) -> str:
         repl, source)
     return source
 
-# ── Применяем все v4 техники ─────────────────────────────────
-
-def v4_decode_utf8_calls(source: str) -> str:
-    """
-    Decodes the obfuscation pattern: 'string'('utf-8') -> 'string'
-    This appears after some obfuscators wrap string literals:
-      __import__('sys'('utf-8'))  ->  __import__('sys')
-      for x in ['requests'('utf-8'), 'os'('utf-8')]:  -> ['requests', 'os']
-      getattr(obj, '__method__'('utf-8'))()  ->  getattr(obj, '__method__')()
-    Also handles: b'bytes'('utf-8') -> b'bytes'
-    """
-    prev = None
-    passes = 0
-    while prev != source and passes < 15:
-        prev = source
-        passes += 1
-        # 'string'('encoding') -> 'string'
-        source = re.sub(
-            r"'([^'\\]*)'\s*\(\s*'(?:utf-8|utf8|ascii|latin-1|cp1251|utf_8)'\s*\)",
-            lambda m: f"'{m.group(1)}'",
-            source
-        )
-        source = re.sub(
-            r'"([^"\\]*)"\s*\(\s*"(?:utf-8|utf8|ascii|latin-1|cp1251|utf_8)"\s*\)',
-            lambda m: f'"{m.group(1)}"',
-            source
-        )
-        # b'bytes'('encoding') -> b'bytes'
-        source = re.sub(
-            r"(b'[^']*')\s*\(\s*'[^']*'\s*\)",
-            lambda m: m.group(1),
-            source
-        )
-        source = re.sub(
-            r'(b"[^"]*")\s*\(\s*"[^"]*"\s*\)',
-            lambda m: m.group(1),
-            source
-        )
+def v4_decode_hash_strings(source: str) -> str:
+    string_dict = {}
+    for m in re.finditer(r"(0x[0-9a-fA-F]+|0X[0-9A-Fa-f]+)\s*:\s*['\"]([^'\"]+)['\"]", source):
+        string_dict[m.group(1).lower()] = m.group(2)
+    if string_dict:
+        def lookup(m):
+            key = m.group(1).lower()
+            return repr(string_dict[key]) if key in string_dict else m.group(0)
+        source = re.sub(r'_s\s*\(\s*(0x[0-9a-fA-F]+)\s*\)', lookup, source)
     return source
 
-
 def v4_deobfuscate_source(source: str) -> str:
-    """Применяет все эксклюзивные v4 техники."""
-    source = v4_decode_utf8_calls(source)  # FIX: 'str'('utf-8') pattern
+    source = v4_decode_utf8_calls(source)
     source = v4_decode_substitution(source)
     source = v4_decode_numeral_strings(source)
     source = v4_decode_split_reassemble(source)
-    source = v4_decode_exotic_bases(source)
     source = v4_decode_bitwise_obf(source)
     source = v4_decode_ord_table(source)
     source = v4_decode_format_obf(source)
     source = v4_ast_constant_fold(source)
     source = v4_decode_hyperion_style(source)
-    source = v4_decode_caesar_all(source)
     source = v4_decode_zlib_inline(source)
     source = v4_decode_hash_strings(source)
     return source
 
 
 # ══════════════════════════════════════════════════════════════
-#
-#   ███████╗██╗  ██╗███████╗    ███╗   ██╗███████╗██╗    ██╗
-#   ██╔════╝╚██╗██╔╝██╔════╝    ████╗  ██║██╔════╝██║    ██║
-#   █████╗   ╚███╔╝ █████╗      ██╔██╗ ██║█████╗  ██║ █╗ ██║
-#   ██╔══╝   ██╔██╗ ██╔══╝      ██║╚██╗██║██╔══╝  ██║███╗██║
-#   ███████╗██╔╝ ██╗███████╗    ██║ ╚████║███████╗╚███╔███╔╝
-#   ╚══════╝╚═╝  ╚═╝╚══════╝    ╚═╝  ╚═══╝╚══════╝ ╚══╝╚══╝
-#
-#   СУПЕРПРОДВИНУТАЯ РАСПАКОВКА EXE
+#   MULTI-PASS DECODER — НОВОЕ В v3.1
+#   Автоматически прогоняет файл через несколько слоёв
+#   и показывает прогресс: файл → слой1 → слой2 → слой3
 # ══════════════════════════════════════════════════════════════
 
+def detect_remaining_obfuscation(code: str) -> list:
+    """Определяет оставшуюся обфускацию после декода."""
+    found = []
+    if detect_obfuscation(code): found.append(f"v1:{detect_obfuscation(code)}")
+    if re.search(r'bytes\.fromhex', code) and re.search(r'\^\s*\(\d+\s*\^', code): found.append("XOR-strings")
+    if re.search(r'while\s+\w+\s*!=\s*\d+\s*:', code): found.append("state-machine")
+    if re.search(r'elif\s+\w+\s*==\s*\d+\s*:', code): found.append("elif-state-machine")
+    if re.search(r'def\s+\w+\s*\([^)]+\)\s*,\s*\[', code): found.append("call-wrappers")
+    if re.search(r'[\u3000-\u9fff]', code): found.append("unicode-names")
+    if re.search(r'chr\s*\(\s*\d+\s*\)\s*\+\s*chr', code): found.append("chr-concat")
+    if re.search(r"codecs\.decode.*rot.13", code): found.append("ROT13")
+    if re.search(r'\(~?\w+\s*\^\s*\w+\)\s*\+\s*2\s*\*', code): found.append("MBA")
+    if re.search(r'\\x[0-9a-fA-F]{2}', code): found.append("hex-escape")
+    if re.search(r"'\s*\.join\s*\(\s*\[", code): found.append("join-obf")
+    if re.search(r"\[::-1\]", code): found.append("reversed-strings")
+    if re.search(r'eval\s*\(\s*compile', code): found.append("eval-compile")
+    if re.search(r'pyarmor_runtime\s*\(', code): found.append("PyArmor")
+    if re.search(r'__pyarmor__', code): found.append("PyArmor-runtime")
+    if re.search(r'IsDebuggerPresent|gettrace', code): found.append("anti-debug")
+    if re.search(r'_\s*\*\s*_\s*\+\s*_.*%\s*2\s*==\s*0', code): found.append("N*(N+1)%2")
+    if re.search(r"'[^']*'\s*\(\s*'utf-8'\s*\)", code): found.append("utf8-calls")
+    if re.search(r'\b_v\d+\b', code): found.append("renamed-vars")
+    # Пустые тела функций (признак неполного декода)
+    if re.search(r'def\s+\w+[^:]+:\s*\n(?:\s*\n)+(?:def|class|\Z)', code): found.append("empty-func-bodies")
+    return found
+
+def apply_single_pass(code: str, pass_num: int) -> tuple:
+    """Применяет один проход декодирования. Возвращает (new_code, method_used)."""
+    methods_used = []
+
+    # v1 — lambda+exec (только если есть)
+    m1 = detect_obfuscation(code)
+    if m1:
+        r, info = deobfuscate_code(code)
+        if r and r != code:
+            code = r; methods_used.append(f"v1({info})")
+
+    # v4 — новые методы
+    r4 = v4_deobfuscate_source(code)
+    if r4 != code: code = r4; methods_used.append("v4")
+
+    # v3 — строковые методы
+    r3 = v3_deobfuscate_source(code)
+    if r3 != code: code = r3; methods_used.append("v3")
+
+    # v2 — ренди 2.0
+    r2 = rendy2_deobfuscate(code)
+    if r2 != code: code = r2; methods_used.append("v2")
+
+    method_str = "+".join(methods_used) if methods_used else "no-change"
+    return code, method_str
+
+def multipass_deobfuscate(code: str, max_passes: int = 5) -> tuple:
+    """
+    Многопроходный декодер.
+    Возвращает (final_code, list_of_passes, total_methods)
+    где list_of_passes = [(pass_num, method, remaining_obf), ...]
+    """
+    passes_log = []
+    original_code = code
+    all_methods = []
+
+    for pass_num in range(1, max_passes + 1):
+        before = code
+        code, method = apply_single_pass(code, pass_num)
+
+        remaining = detect_remaining_obfuscation(code)
+        passes_log.append({
+            "pass": pass_num,
+            "method": method,
+            "changed": code != before,
+            "remaining": remaining,
+            "lines": code.count('\n') + 1,
+            "chars": len(code),
+        })
+
+        if method != "no-change":
+            all_methods.append(f"pass{pass_num}:{method}")
+
+        # Если ничего не изменилось ИЛИ нет обфускации — стоп
+        if code == before or not remaining:
+            break
+
+    total_method = " → ".join(all_methods) if all_methods else "OMEGA auto"
+    return code, passes_log, total_method
+
+
+# ══════════════════════════════════════════════════════════════
+#   EXE DEEP SCAN
+# ══════════════════════════════════════════════════════════════
+
+def calc_entropy(data: bytes) -> float:
+    if not data: return 0.0
+    import math
+    freq = Counter(data)
+    length = len(data)
+    return -sum((c / length) * math.log2(c / length) for c in freq.values() if c > 0)
+
+def analyze_code_complexity(source: str) -> dict:
+    lines = source.split('\n')
+    result = {
+        'lines':        len(lines),
+        'chars':        len(source),
+        'functions':    len(re.findall(r'^\s*def\s+\w+', source, re.MULTILINE)),
+        'classes':      len(re.findall(r'^\s*class\s+\w+', source, re.MULTILINE)),
+        'imports':      len(re.findall(r'^\s*(?:import|from)\s+', source, re.MULTILINE)),
+        'exec_calls':   len(re.findall(r'\bexec\s*\(', source)),
+        'eval_calls':   len(re.findall(r'\beval\s*\(', source)),
+        'lambdas':      len(re.findall(r'\blambda\b', source)),
+        'base64_blobs': len(re.findall(r'b64decode', source)),
+        'hex_strings':  len(re.findall(r'\\x[0-9a-fA-F]{2}', source)),
+        'unicode_names': len(re.findall(r'[\u3000-\u9fff]', source)),
+        'xor_ops':      len(re.findall(r'\^', source)),
+        'entropy':      calc_entropy(source.encode()),
+    }
+    score = 0
+    if result['exec_calls'] > 0:   score += 15
+    if result['eval_calls'] > 0:   score += 10
+    if result['base64_blobs'] > 0: score += 20
+    if result['hex_strings'] > 10: score += 15
+    if result['unicode_names'] > 0: score += 25
+    if result['xor_ops'] > 5:      score += 10
+    if result['entropy'] > 5.5:    score += 15
+    if result['lambdas'] > 10:     score += 10
+    result['obf_score'] = min(score, 100)
+    result['obf_level'] = (
+        "МАКСИМУМ" if score >= 70 else
+        "ВЫСОКИЙ"  if score >= 50 else
+        "СРЕДНИЙ"  if score >= 25 else
+        "НИЗКИЙ"
+    )
+    return result
+
 def exe_deep_scan(data: bytes) -> dict:
-    """
-    Глубокое сканирование EXE файла — ищет все возможные
-    Python payload'ы, строки, конфиги и embedded файлы.
-    """
     report = {
         'format':        v3_detect_format(data),
         'size':          len(data),
@@ -1555,8 +1368,6 @@ def exe_deep_scan(data: bytes) -> dict:
         'entry_points':  [],
         'imports':       [],
     }
-
-    # Определение версии Python
     ver_patterns = [
         (b'python38.dll', '3.8'), (b'python39.dll', '3.9'),
         (b'python310.dll', '3.10'), (b'python311.dll', '3.11'),
@@ -1566,8 +1377,6 @@ def exe_deep_scan(data: bytes) -> dict:
     for pat, ver in ver_patterns:
         if pat.lower() in data.lower():
             report['python_version'] = ver; break
-
-    # Поиск Python-строк
     try:
         text = data.decode('utf-8', errors='ignore')
         for pattern in [r'import \w+', r'def \w+\s*\(', r'class \w+[:(]',
@@ -1575,27 +1384,6 @@ def exe_deep_scan(data: bytes) -> dict:
             matches = re.findall(pattern, text)
             report['python_strings'].extend(matches[:5])
     except: pass
-
-    # Поиск base64 блоков
-    b64_pat = re.compile(rb'[A-Za-z0-9+/]{40,}={0,2}')
-    for m in b64_pat.finditer(data):
-        blob = m.group(0)
-        try:
-            decoded = base64.b64decode(blob)
-            if len(decoded) > 50:
-                inner = decoded
-                for fn in [zlib.decompress, gzip.decompress, lzma.decompress]:
-                    try: inner = fn(inner)
-                    except: pass
-                try:
-                    s = inner.decode('utf-8')
-                    if ('def ' in s or 'import ' in s) and len(s) > 100:
-                        report['base64_blobs'].append({'offset': m.start(), 'size': len(decoded), 'preview': s[:200]})
-                        if len(report['base64_blobs']) >= 3: break
-                except: pass
-        except: pass
-
-    # PE секции
     if data[:2] == b'MZ':
         try:
             pe_offset = struct.unpack_from('<I', data, 0x3C)[0]
@@ -1609,18 +1397,11 @@ def exe_deep_scan(data: bytes) -> dict:
                     vsize, vaddr, raw_size, raw_offset = struct.unpack_from('<IIII', data, so + 8)
                     report['pe_sections'].append({'name': name, 'vsize': vsize, 'raw_size': raw_size})
         except: pass
-
     return report
 
 def exe_extract_all(data: bytes, filename: str) -> list:
-    """
-    Максимальное извлечение — пробует ВСЕ методы.
-    Возвращает список (name, content, method).
-    """
     results = []
     fmt = v3_detect_format(data)
-
-    # Метод 1: PyInstaller
     if fmt in ("pyinstaller", "pe_with_zip", "pyinstaller_pyz", "pe_unknown"):
         try:
             pyinst_files = v3_extract_pyinstaller(data)
@@ -1633,8 +1414,6 @@ def exe_extract_all(data: bytes, filename: str) -> list:
                     try: results.append((name, content.decode('utf-8', errors='replace'), "PyInstaller"))
                     except: pass
         except: pass
-
-    # Метод 2: ZIP внутри EXE (универсальный поиск)
     import zipfile
     for start_offset in [0, data.rfind(b'PK\x03\x04'), data.find(b'PK\x03\x04')]:
         if start_offset <= 0: continue
@@ -1652,11 +1431,8 @@ def exe_extract_all(data: bytes, filename: str) -> list:
                         except: pass
         except: pass
         if results: break
-
-    # Метод 3: Поиск .pyc magic bytes
     pyc_magics = [b'\x6f\x0d\x0d\x0a', b'\x61\x0d\x0d\x0a', b'\x33\x0d\x0d\x0a',
-                  b'\xee\x0c\x0d\x0a', b'\x55\x0d\x0d\x0a', b'\x42\x0d\x0d\x0a',
-                  b'\xd1\x0c\x0d\x0a', b'\x0c\x0d\x0d\x0a']
+                  b'\xee\x0c\x0d\x0a', b'\x55\x0d\x0d\x0a', b'\x42\x0d\x0d\x0a']
     for magic in pyc_magics:
         pos = 0
         while True:
@@ -1670,56 +1446,10 @@ def exe_extract_all(data: bytes, filename: str) -> list:
             except: pass
             pos += 1
             if len(results) >= 20: break
-
-    # Метод 4: zlib-сжатые блоки
-    pos = 0
-    zlib_found = 0
-    while zlib_found < 5:
-        pos = data.find(b'\x78\x9c', pos)  # zlib magic
-        if pos == -1:
-            pos = data.find(b'\x78\xda', 0)  # best compression
-            if pos == -1: break
-        try:
-            decomp = zlib.decompress(data[pos:pos+65536])
-            if len(decomp) > 100:
-                try:
-                    s = decomp.decode('utf-8')
-                    if 'def ' in s or 'import ' in s or 'class ' in s:
-                        results.append((f'zlib_{pos:08x}.py', s, f"zlib block@{pos:#x}"))
-                        zlib_found += 1
-                except: pass
-        except: pass
-        pos += 2
-
-    # Метод 5: Python string extraction (строки из PE)
     if not results or fmt == "nuitka":
         extracted = v3_extract_pe_strings(data)
         if extracted:
             results.append(('strings_extracted.py', f"# Extracted Python strings from {filename}\n\n{extracted}", "PE strings"))
-
-    # Метод 6: base64 блоки → decompress → source
-    b64_pat = re.compile(rb'[A-Za-z0-9+/]{100,}={0,2}')
-    b64_found = 0
-    for m in b64_pat.finditer(data):
-        if b64_found >= 3: break
-        blob = m.group(0)
-        try:
-            decoded = base64.b64decode(blob)
-            inner = decoded
-            chain = []
-            for fn, name in [(zlib.decompress,'zlib'), (gzip.decompress,'gzip'), (lzma.decompress,'lzma')]:
-                try: inner = fn(inner); chain.append(name)
-                except: pass
-            try:
-                s = inner.decode('utf-8')
-                if len(s) > 100 and ('def ' in s or 'import ' in s):
-                    method_str = 'b64+' + '+'.join(chain) if chain else 'b64'
-                    results.append((f'b64blob_{m.start():08x}.py', s, method_str))
-                    b64_found += 1
-            except: pass
-        except: pass
-
-    # Дедупликация по содержимому
     seen = set()
     unique_results = []
     for name, content, method in results:
@@ -1727,126 +1457,35 @@ def exe_extract_all(data: bytes, filename: str) -> list:
         if sig not in seen:
             seen.add(sig)
             unique_results.append((name, content, method))
-
     return unique_results if unique_results else [('no_python_found.txt',
-        f"# Python код не найден в {filename}\n"
-        f"# Формат: {fmt}\n"
-        f"# Размер: {len(data):,} байт\n"
-        f"# Попробуй другой инструмент (IDA, Ghidra) для дизассемблирования", "none")]
-
-
-# ══════════════════════════════════════════════════════════════
-#   АНАЛИЗАТОР — энтропия, сложность, обнаружение
-# ══════════════════════════════════════════════════════════════
-
-def calc_entropy(data: bytes) -> float:
-    """Вычисляет энтропию Шеннона (0-8 бит/байт)."""
-    if not data: return 0.0
-    import math
-    freq = Counter(data)
-    length = len(data)
-    # Правильная формула — float не имеет bit_length, используем math.log2
-    return -sum((c / length) * math.log2(c / length) for c in freq.values() if c > 0)
-
-def analyze_code_complexity(source: str) -> dict:
-    """Анализирует сложность и характеристики кода."""
-    lines = source.split('\n')
-    result = {
-        'lines':        len(lines),
-        'chars':        len(source),
-        'functions':    len(re.findall(r'^\s*def\s+\w+', source, re.MULTILINE)),
-        'classes':      len(re.findall(r'^\s*class\s+\w+', source, re.MULTILINE)),
-        'imports':      len(re.findall(r'^\s*(?:import|from)\s+', source, re.MULTILINE)),
-        'exec_calls':   len(re.findall(r'\bexec\s*\(', source)),
-        'eval_calls':   len(re.findall(r'\beval\s*\(', source)),
-        'lambdas':      len(re.findall(r'\blambda\b', source)),
-        'base64_blobs': len(re.findall(r'b64decode', source)),
-        'hex_strings':  len(re.findall(r'\\x[0-9a-fA-F]{2}', source)),
-        'unicode_names': len(re.findall(r'[\u3000-\u9fff]', source)),
-        'xor_ops':      len(re.findall(r'\^', source)),
-        'entropy':      calc_entropy(source.encode()),
-    }
-    # Оценка уровня обфускации (0-100)
-    score = 0
-    if result['exec_calls'] > 0:   score += 15
-    if result['eval_calls'] > 0:   score += 10
-    if result['base64_blobs'] > 0: score += 20
-    if result['hex_strings'] > 10: score += 15
-    if result['unicode_names'] > 0: score += 25
-    if result['xor_ops'] > 5:      score += 10
-    if result['entropy'] > 5.5:    score += 15
-    if result['lambdas'] > 10:     score += 10
-    result['obf_score'] = min(score, 100)
-    result['obf_level'] = (
-        "🔴 МАКСИМУМ" if score >= 70 else
-        "🟠 ВЫСОКИЙ"  if score >= 50 else
-        "🟡 СРЕДНИЙ"  if score >= 25 else
-        "🟢 НИЗКИЙ"
-    )
-    return result
+        f"# Python код не найден в {filename}\n# Формат: {fmt}\n# Размер: {len(data):,} байт", "none")]
 
 def full_detect_obfuscation(code: str) -> list:
-    """Полное обнаружение всех методов обфускации."""
     detected = []
     method_v1 = detect_obfuscation(code)
     if method_v1: detected.append(f"v1: {method_v1}")
-    if re.search(r'bytes\.fromhex', code) and re.search(r'\^\s*\(\d+\s*\^', code): detected.append("XOR-строки")
-    if re.search(r'while \w+ != \d+:', code): detected.append("state-machine")
-    if re.search(r'def \w+\s*\(\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)\s*:', code): detected.append("call-wrappers")
-    if re.search(r'[\u3000-\u9fff]', code): detected.append("unicode-имена")
-    if re.search(r'chr\s*\(\s*\d+\s*\)\s*\+\s*chr', code): detected.append("chr()-конкат")
-    if re.search(r"codecs\.decode.*rot.13", code): detected.append("ROT13")
-    if re.search(r'\(~?\w+\s*\^\s*\w+\)\s*\+\s*2\s*\*', code): detected.append("MBA")
-    if re.search(r'\\x[0-9a-fA-F]{2}', code): detected.append("hex-escape")
-    if re.search(r'\\u[0-9a-fA-F]{4}', code): detected.append("unicode-escape")
-    if re.search(r"'\s*\.join\s*\(\s*\[", code): detected.append("join-obf")
-    if re.search(r"\[::-1\]", code): detected.append("reversed-strings")
-    if re.search(r'eval\s*\(\s*compile', code): detected.append("eval(compile)")
-    if re.search(r'pyarmor_runtime\s*\(', code): detected.append("PyArmor")
-    if re.search(r'__pyarmor__', code): detected.append("PyArmor-runtime")
-    if re.search(r'IsDebuggerPresent|gettrace', code): detected.append("anti-debug")
-    if re.search(r'time\.time\(\)\s*-\s*\w+\s*>', code): detected.append("time-check")
-    if re.search(r'_\s*\*\s*_\s*\+\s*_.*%\s*2\s*==\s*0', code): detected.append("N*(N+1)%2")
-    if re.search(r'translate\s*\(\s*str\.maketrans', code): detected.append("substitution")
-    if re.search(r'bytes\s*\(\s*\[[0-9,\s]+\]\s*\)', code): detected.append("bytes-literal")
+    remaining = detect_remaining_obfuscation(code)
+    detected.extend(remaining)
     return detected if detected else ["не обнаружена"]
 
-
-# ══════════════════════════════════════════════════════════════
-#   ГЛАВНЫЙ АВТО-ДЕОБФУСКАТОР
-# ══════════════════════════════════════════════════════════════
-
 def auto_deobfuscate_source(code: str) -> tuple:
-    """
-    OMEGA авто-деобфускатор.
-    Пробует все методы v1 → v4 → v3 → v2 в порядке приоритета.
-    Возвращает (result, method, stats)
-    """
     lines_in = code.count('\n') + 1
     chars_in = len(code)
     analysis = analyze_code_complexity(code)
-
-    # 1. v1 (lambda+exec)
     method_v1 = detect_obfuscation(code)
     if method_v1:
         result, info = deobfuscate_code(code)
         if result:
             return result, f"v1: {info}", analysis
-
-    # 2. v4 (новые методы) + v3 + v2 комбо
     v4_result = v4_deobfuscate_source(code)
     v3_result = v3_deobfuscate_source(v4_result)
     if v3_result != code:
         final = rendy2_deobfuscate(v3_result)
         return final, "v4+v3+v2 (OMEGA full pipeline)", analysis
-
-    # 3. v3 source-level
     v3_only = v3_deobfuscate_source(code)
     if v3_only != code:
         final = rendy2_deobfuscate(v3_only)
         return final, "v3+v2 (MBA/chr/hex + universal cleanup)", analysis
-
-    # 4. v2 (Ренди 2.0)
     v2_result = rendy2_deobfuscate(code)
     method = "v2 (Ренди 2.0 — universal)"
     if method_v1: method = f"v2 fallback (v1 {method_v1} не сработал)"
@@ -1854,44 +1493,22 @@ def auto_deobfuscate_source(code: str) -> tuple:
 
 
 # ══════════════════════════════════════════════════════════════
-#
-#   ██████╗  ██████╗ ████████╗    ██╗   ██╗██╗
-#   ██╔══██╗██╔═══██╗╚══██╔══╝   ██║   ██║██║
-#   ██████╔╝██║   ██║   ██║      ██║   ██║██║
-#   ██╔══██╗██║   ██║   ██║      ██║   ██║██║
-#   ██████╔╝╚██████╔╝   ██║      ╚██████╔╝██║
-#   ╚═════╝  ╚═════╝    ╚═╝       ╚═════╝ ╚═╝
-#
-#   ТГ БОТ — ЛЕГЕНДАРНЫЙ ДИЗАЙН
+#   ASCII БАННЕРЫ
 # ══════════════════════════════════════════════════════════════
-
-# ══════════════════════════════════════════════════════════════
-#   ASCII БАННЕРЫ — SICKSILENT EDITION
-#   Все рамки выровнены ровно, ничего не торчит
-# ══════════════════════════════════════════════════════════════
-
-# ──────────────────────────────────────────────────────────────
-# BANNER SYSTEM — Telegram Monospace Edition
-# All banners wrapped in ``` for guaranteed alignment on any device
-# ──────────────────────────────────────────────────────────────
 
 def _hbox(lines: list, w: int = 42) -> str:
-    """Fixed-width ASCII box. Use inside ``` for guaranteed alignment."""
     sep = "+" + "-" * (w + 2) + "+"
     rows = [sep]
     for line in lines:
         line = str(line)
-        if len(line) > w:
-            line = line[:w-1] + ">"
+        if len(line) > w: line = line[:w-1] + ">"
         rows.append("| " + line + " " * (w - len(line)) + " |")
     rows.append(sep)
     return "\n".join(rows)
 
 def _mono(text: str) -> str:
-    """Wrap in Telegram monospace block."""
     return "```\n" + text.replace("`", "'") + "\n```"
 
-# ── MAIN BANNER ──────────────────────────────────────────────
 _SICK_ASCII = (
     " ___ ___ ___ _  __ ___ ___ _   ___ _  _ _____\n"
     "/ __|_ _/ __| |/ // __/ __| | | __| \\| |_   _|\n"
@@ -1901,8 +1518,8 @@ _SICK_ASCII = (
 
 def BANNER_MAIN() -> str:
     box = _hbox([
-        " PYTHON DEOBFUSCATOR  v3.0 OMEGA ",
-        " 50+ DECODE TECHNIQUES           ",
+        " PYTHON DEOBFUSCATOR  v3.1 OMEGA ",
+        " 50+ DECODE TECHNIQUES + MULTIPASS",
         " @ArrhythmiaFucks  [sicksilent]  ",
         " v1 / v2 / v3 / v4 + EXE UNPACK ",
     ], 42)
@@ -1959,55 +1576,47 @@ def BANNER_LOCKED() -> str:
 def BANNER_ADMIN() -> str:
     return _mono(_hbox([
         " >>> ADMIN PANEL <<<              ",
-        " sicksilent deobf | OMEGA v3.0   ",
+        " sicksilent deobf | OMEGA v3.1   ",
     ], 42))
 
 def BANNER_STATS() -> str:
     return _mono(_hbox([
         " >>> STATISTICS <<<               ",
-        " sicksilent deobf | OMEGA v3.0   ",
+        " sicksilent deobf | OMEGA v3.1   ",
     ], 42))
 
-def BANNER_ANALYZE() -> str:
+def BANNER_MULTIPASS(pass_num: int, total: int) -> str:
     return _mono(_hbox([
-        " >>> CODE ANALYSIS <<<            ",
-        " sicksilent deobf | OMEGA v3.0   ",
+        f" >>> MULTI-PASS DECODE <<<        ",
+        f"",
+        f" Pass {pass_num} / {total}                     ",
+        f"",
+        f" sicksilent deobf | @ArrhythmiaFucks ",
     ], 42))
 
-# Прогресс-бар
 def pbar(pct: int, width: int = 20) -> str:
     filled = int(width * pct / 100)
     empty  = width - filled
     return "[" + "#" * filled + "-" * empty + "] " + str(pct) + "%"
 
-# Декоративный разделитель
 DIV  = "=" * 34
 DIV2 = "-" * 34
-
 
 # ══════════════════════════════════════════════════════════════
 #   СИСТЕМА ПОДПИСКИ НА КАНАЛ
 # ══════════════════════════════════════════════════════════════
 
-# Словарь ожидающих подтверждения: {user_id: {"name": ..., "username": ..., "ts": ...}}
 pending_subscribe: dict = {}
 
 def check_channel_subscription(user_id: int) -> bool:
-    """
-    Проверяет подписку на канал.
-    Если CHANNEL_ID задан (публичный канал) — проверяем через API.
-    Если None (приватный) — доступ только через whitelist (ручная выдача).
-    """
     if CHANNEL_ID:
         try:
             member = bot.get_chat_member(CHANNEL_ID, user_id)
             return member.status in ("member", "administrator", "creator")
         except: pass
-    # Приватный канал — проверяем whitelist
     return is_allowed(user_id)
 
 def kb_subscribe():
-    """Клавиатура для неподписанных пользователей."""
     kb = telebot.types.InlineKeyboardMarkup()
     kb.row(telebot.types.InlineKeyboardButton(
         "[CH] Подписаться на канал", url=CHANNEL_LINK))
@@ -2015,8 +1624,7 @@ def kb_subscribe():
         "[+] Я подписался — проверить", callback_data="check_sub"))
     return kb
 
-_deobf_state: dict    = {}
-# pending_subscribe объявлен выше в секции баннеров
+_deobf_state: dict = {}
 
 
 def _send(chat_id, text, kb=None, md=False):
@@ -2039,22 +1647,23 @@ def _edit(chat_id, msg_id, text, kb=None, md=False):
 # ── ReplyKeyboard ──────────────────────────────────────────────
 def kb_main():
     kb = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    kb.row("🔓 АВТО ДЕКОД", "[SCAN] Анализ файла")
+    kb.row("[*] АВТО ДЕКОД", "[SCAN] Анализ файла")
     kb.row("[EXE] EXE / Binary", "[DEEP] Глубокое сканирование")
-    kb.row("🔓 v1 lambda", "🔓 v2 Ренди", "[FIX] v3 Строки")
-    kb.row("[NEW] v4 OMEGA", "[STAT] Моя статистика")
+    kb.row("[MULTI] Многопроходный", "[NEW] v4 OMEGA")
+    kb.row("[v1] lambda", "[v2] Ренди", "[v3] Строки")
+    kb.row("[STAT] Моя статистика")
     return kb
 
-# ── InlineKeyboard для выбора режима ──────────────────────────
 def kb_deobf():
     kb = telebot.types.InlineKeyboardMarkup()
     kb.row(telebot.types.InlineKeyboardButton("[*] OMEGA АВТО (v1→v4→v3→v2)", callback_data="deobf_auto"))
-    kb.row(telebot.types.InlineKeyboardButton("🔍 Анализ + определить метод", callback_data="deobf_detect"))
+    kb.row(telebot.types.InlineKeyboardButton("[MULTI] Многопроходный (авто N слоёв)", callback_data="deobf_multi"))
+    kb.row(telebot.types.InlineKeyboardButton("[SCAN] Анализ + определить метод", callback_data="deobf_detect"))
     kb.row(
-        telebot.types.InlineKeyboardButton("🔓 Только v1", callback_data="deobf_v1"),
-        telebot.types.InlineKeyboardButton("🔓 Только v2", callback_data="deobf_v2"))
+        telebot.types.InlineKeyboardButton("[v1] lambda+exec", callback_data="deobf_v1"),
+        telebot.types.InlineKeyboardButton("[v2] Ренди 2.0", callback_data="deobf_v2"))
     kb.row(
-        telebot.types.InlineKeyboardButton("[FIX] v3 Строки", callback_data="deobf_v3src"),
+        telebot.types.InlineKeyboardButton("[v3] Строки", callback_data="deobf_v3src"),
         telebot.types.InlineKeyboardButton("[NEW] v4 OMEGA", callback_data="deobf_v4"))
     kb.row(
         telebot.types.InlineKeyboardButton("[EXE] EXE/Binary", callback_data="deobf_v3bin"),
@@ -2067,11 +1676,11 @@ def kb_deobf():
 # ══════════════════════════════════════════════════════════════
 @bot.message_handler(commands=["start"])
 def cmd_start(msg):
-    try:
-        uid   = int(msg.from_user.id)
-        name  = msg.from_user.first_name or "анон"
-        uname = getattr(msg.from_user, "username", "") or ""
+    uid   = int(msg.from_user.id)
+    name  = msg.from_user.first_name or "анон"
+    uname = getattr(msg.from_user, "username", "") or ""
 
+    try:
         if is_banned(uid):
             bot.send_message(msg.chat.id,
                 f"[BAN] Ты заблокирован.\nПо вопросам: {ADMIN_USERNAME}")
@@ -2109,38 +1718,31 @@ def cmd_start(msg):
             allowed_users[key]["uses"] = allowed_users[key].get("uses", 0) + 1
             save_users()
 
-        adm_badge = "  ★ ADMIN" if is_admin(uid) else ""
+        adm_badge = "  [ADMIN]" if is_admin(uid) else ""
         text = (
             BANNER_MAIN() + "\n\n"
             f">>> Welcome, {name}!{adm_badge}\n\n"
             f"{DIV}\n"
             f"[sicksilent deobf] 50+ techniques\n"
             f"{DIV}\n\n"
-            f"[v1] lambda+exec obfuscation:\n"
-            f"  base64/base32/base16\n"
-            f"  zlib/gzip/lzma\n"
-            f"  Combo + Rendy marshal-chain\n\n"
+            f"[v1] lambda+exec:\n"
+            f"  base64/32/16 + zlib/gzip/lzma\n\n"
             f"[v2] Rendy 2.0 Universal:\n"
-            f"  XOR strings + state-machine\n"
-            f"  call-wrappers + dummy vars\n"
-            f"  getattr chains + unicode rename\n"
-            f"  N*(N+1)%2 if-blocks\n\n"
+            f"  XOR + state-machine + wrappers\n\n"
             f"[v3] String Methods:\n"
-            f"  MBA + ROT13 + chr() concat\n"
-            f"  hex/unicode escape + join obf\n"
-            f"  reversed + eval(compile)\n\n"
+            f"  MBA + ROT13 + chr() + hex\n\n"
             f"[v4] OMEGA Exclusive:\n"
             f"  Substitution + Base58/85\n"
-            f"  Format obf + Bitwise tricks\n"
-            f"  Ord/char tables + AST folding\n"
-            f"  PyArmor cleanup + Zlib inline\n"
-            f"  'str'('utf-8') pattern fix\n\n"
+            f"  Format + Bitwise + AST fold\n\n"
+            f"[MULTI] Multi-Pass:\n"
+            f"  Авто N слоёв, видишь прогресс\n"
+            f"  файл→слой1→слой2→слой3\n\n"
             f"[EXE] EXE Unpacker:\n"
-            f"  PyInstaller + cx_Freeze + py2exe\n"
-            f"  zipapp + .pyc + Deep Scan (6 methods)\n\n"
+            f"  PyInstaller + cx_Freeze + pyc\n\n"
             f"{DIV}\n"
-            f"[COMMANDS]\n"
+            f"[CMD]\n"
             f"  /deobf   -- OMEGA AUTO\n"
+            f"  /multi   -- Multi-Pass\n"
             f"  /deobf2  -- Rendy 2.0\n"
             f"  /deobf3  -- EXE/Binary\n"
             f"  /deobf4  -- v4 OMEGA\n"
@@ -2150,22 +1752,34 @@ def cmd_start(msg):
         if is_admin(uid):
             text += (
                 f"{DIV}\n"
-                f"[ADMIN] Admin:\n"
-                f"  /admin · /add · /remove\n"
-                f"  /ban · /unban · /users\n"
-                f"  /pending · /broadcast\n"
+                f"[ADMIN]:\n"
+                f"  /admin /add /remove /ban /unban\n"
+                f"  /users /pending /broadcast\n"
             )
 
+        # Отправляем фото если есть
         if os.path.exists(WELCOME_PHOTO):
             try:
-                with open(WELCOME_PHOTO, "rb") as f: bot.send_photo(msg.chat.id, f)
-            except: pass
+                with open(WELCOME_PHOTO, "rb") as f:
+                    bot.send_photo(msg.chat.id, f, caption="[sicksilent deobf] OMEGA v3.1")
+            except Exception as e:
+                print(f"[start] photo err: {e}")
 
         bot.send_message(msg.chat.id, text, reply_markup=kb_main(), parse_mode='Markdown')
+
     except Exception as e:
-        import traceback; print(f"[start] ERR: {traceback.format_exc()}")
-        try: bot.send_message(msg.chat.id, "Bot is running! Try /start again")
-        except: pass
+        import traceback
+        print(f"[start] ERR: {traceback.format_exc()}")
+        # НЕ отправляем "Bot is running" — просто логируем ошибку
+        # Пробуем отправить упрощённое сообщение
+        try:
+            bot.send_message(msg.chat.id,
+                f"[sicksilent deobf] v{BOT_VERSION}\n\n"
+                f"Привет, {name}!\n\n"
+                f"Используй кнопки ниже или /deobf для декода.",
+                reply_markup=kb_main())
+        except:
+            pass
 
 
 @bot.message_handler(commands=["deobf"])
@@ -2173,82 +1787,52 @@ def cmd_start(msg):
 def cmd_deobf(msg):
     _deobf_state[msg.from_user.id] = "waiting_auto"
     _send(msg.chat.id,
-        "╔══════════════════════════════╗\n"
-        "║  [*] OMEGA АВТО ДЕОБФУСКАТОР  ║\n"
-        "╚══════════════════════════════╝\n\n"
-        "Пробует все методы автоматически:\n"
-        "v1 → v4 OMEGA → v3 → v2\n\n"
-        "📎 Отправь .py файл:",
+        "[*] OMEGA АВТО ДЕОБФУСКАТОР\n\n"
+        "Пробует все методы:\nv1 → v4 → v3 → v2\n\n"
+        "Отправь .py файл:",
         kb_deobf())
+
+
+@bot.message_handler(commands=["multi"])
+@access_required
+def cmd_multi(msg):
+    _deobf_state[msg.from_user.id] = "waiting_multi"
+    _send(msg.chat.id,
+        "[MULTI] МНОГОПРОХОДНЫЙ ДЕКОДЕР\n\n"
+        "Автоматически определяет сколько слоёв\n"
+        "нужно снять и применяет каждый.\n\n"
+        "Ты видишь прогресс каждого шага:\n"
+        "  файл -> слой1 -> слой2 -> слой3\n\n"
+        "Идеально для сложных обфускаций!\n\n"
+        "Отправь .py файл:")
 
 
 @bot.message_handler(commands=["deobf2"])
 @access_required
 def cmd_deobf2(msg):
     _deobf_state[msg.from_user.id] = "waiting_v2"
-    _send(msg.chat.id,
-        "╔══════════════════════════════╗\n"
-        "║  🧠 РЕНДИ 2.0 UNIVERSAL      ║\n"
-        "╚══════════════════════════════╝\n\n"
-        "30+ техник:\n"
-        "  • XOR строки · state-machine\n"
-        "  • call-wrappers · dummy vars\n"
-        "  • getattr() chains\n"
-        "  • N*(N+1)%2 if-blocks\n"
-        "  • anti-debug cleanup\n\n"
-        "📎 Отправь .py файл:")
+    _send(msg.chat.id, "[v2] РЕНДИ 2.0\n\nОтправь .py файл:")
 
 
 @bot.message_handler(commands=["deobf3"])
 @access_required
 def cmd_deobf3(msg):
     _deobf_state[msg.from_user.id] = "waiting_v3bin"
-    _send(msg.chat.id,
-        BANNER_BINARY() + "\n\n"
-        "[*] Send .exe / .pyc / .pyz file:",
-        md=True)
+    _send(msg.chat.id, BANNER_BINARY() + "\n\n[*] Отправь .exe / .pyc / .pyz:", md=True)
 
 
 @bot.message_handler(commands=["deobf4"])
 @access_required
 def cmd_deobf4(msg):
     _deobf_state[msg.from_user.id] = "waiting_v4"
-    _send(msg.chat.id,
-        "╔══════════════════════════════╗\n"
-        "║  [NEW] v4 OMEGA EXCLUSIVE       ║\n"
-        "╚══════════════════════════════╝\n\n"
-        "15 эксклюзивных техник:\n"
-        "  • Substitution cipher\n"
-        "  • Base58/85/91 decode\n"
-        "  • Format string obf\n"
-        "  • Bitwise NOT/shift cleanup\n"
-        "  • Ord/char XOR tables\n"
-        "  • AST constant folding\n"
-        "  • PyArmor/Hyperion cleanup\n"
-        "  • Decimal/octal/binary chars\n"
-        "  • Hash string tables\n"
-        "  • Zlib inline exec decode\n\n"
-        "📎 Отправь .py файл:")
+    _send(msg.chat.id, "[NEW] v4 OMEGA\n\nОтправь .py файл:")
 
 
 @bot.message_handler(commands=["deep"])
 @access_required
 def cmd_deep(msg):
     _deobf_state[msg.from_user.id] = "waiting_deep"
-    _send(msg.chat.id,
-        "╔══════════════════════════════╗\n"
-        "║  [DEEP] DEEP SCAN OMEGA          ║\n"
-        "╚══════════════════════════════╝\n\n"
-        "Максимальный анализ EXE:\n"
-        "  • 6 методов извлечения\n"
-        "  • PE секции + импорты\n"
-        "  • Поиск .pyc magic bytes\n"
-        "  • zlib/gzip блоки\n"
-        "  • base64 payload scan\n"
-        "  • Python string extraction\n"
-        "  • Версия Python\n"
-        "  • Дедупликация результатов\n\n"
-        "📎 Отправь .exe / .pyc / .pyz:")
+    _send(msg.chat.id, "[DEEP] DEEP SCAN EXE\n\nОтправь .exe / .pyc / .pyz:")
 
 
 @bot.message_handler(commands=["stats"])
@@ -2261,21 +1845,18 @@ def cmd_stats(msg):
     total       = global_stats.get('total_decoded', 0)
     total_bytes = global_stats.get('bytes_processed', 0)
     top_methods = sorted(global_stats.get('methods', {}).items(), key=lambda x: -x[1])[:5]
-
-    # Прогресс-бар юзера
     lvl = min(uses // 10, 10)
     user_bar = pbar(lvl * 10, 15)
-
     text = (
         BANNER_STATS() + "\n\n"
         f"[USR] Твои данные:\n"
-        f"  Файлов декодировано: {uses}\n"
+        f"  Декодировано: {uses}\n"
         f"  Уровень: [{user_bar}] lv{lvl}\n"
         f"  С нами с: {joined}\n\n"
         f"{DIV}\n"
-        f"[GLOBAL] Глобальная:\n"
-        f"  Декодировано:  {total}\n"
-        f"  Байт обработано: {total_bytes:,}\n"
+        f"[GLOBAL]:\n"
+        f"  Всего: {total}\n"
+        f"  Байт: {total_bytes:,}\n"
     )
     if top_methods:
         text += f"\n{DIV}\n[TOP] Топ методов:\n"
@@ -2294,21 +1875,22 @@ def cmd_stats(msg):
 def handle_document(msg):
     uid = int(msg.from_user.id)
     if not is_allowed(uid):
-        bot.send_message(msg.chat.id, "🔒 Доступ закрыт~"); return
+        bot.send_message(msg.chat.id, "[LOCK] Доступ закрыт"); return
 
     state = _deobf_state.get(uid)
     if state is None:
         bot.send_message(msg.chat.id,
             "Выбери режим:\n"
             "/deobf  — [*] АВТО\n"
-            "/deobf2 — 🧠 Ренди 2.0\n"
+            "/multi  — [MULTI] Многопроходный\n"
+            "/deobf2 — [v2] Ренди 2.0\n"
             "/deobf3 — [EXE] EXE/Binary\n"
             "/deobf4 — [NEW] v4 OMEGA\n"
             "/deep   — [DEEP] Deep Scan\n"); return
 
     doc = msg.document; fname = doc.file_name or "file"
     _deobf_state.pop(uid, None)
-    wait = bot.send_message(msg.chat.id, "⠋ Загружаю файл...")
+    wait = bot.send_message(msg.chat.id, "[ ] Загружаю файл...")
 
     def do():
         try:
@@ -2317,37 +1899,27 @@ def handle_document(msg):
 
             # ── EXE Binary ──
             if state in ("waiting_v3bin", "waiting_deep"):
-                mode_name = "[DEEP] DEEP SCAN" if state == "waiting_deep" else "[EXE] EXE UNPACK"
+                mode_name = "[DEEP]" if state == "waiting_deep" else "[EXE]"
                 _edit(msg.chat.id, wait.message_id,
-                    f"╔══════════════════════════════╗\n"
-                    f"║  {mode_name}               ║\n"
-                    f"╚══════════════════════════════╝\n\n"
-                    f"[FILE] Файл: {fname}\n"
-                    f"[STAT] Размер: {len(downloaded):,} байт\n"
-                    f"🔎 Определяю формат...")
+                    f"{mode_name} Файл: {fname}\n"
+                    f"Размер: {len(downloaded):,} байт\n"
+                    f"Определяю формат...")
 
                 fmt = v3_detect_format(downloaded)
                 _edit(msg.chat.id, wait.message_id,
-                    f"[EXE] Формат: {fmt}\n"
-                    f"⠴ Извлекаю Python код...")
+                    f"Формат: {fmt}\nИзвлекаю Python код...")
 
                 if state == "waiting_deep":
-                    # Глубокий скан
                     results = exe_extract_all(downloaded, fname)
                     report  = exe_deep_scan(downloaded)
                     header  = (
-                        f"╔══════════════════════════════╗\n"
-                        f"║  [DEEP] DEEP SCAN ЗАВЕРШЁН       ║\n"
-                        f"╚══════════════════════════════╝\n\n"
-                        f"[FILE] Файл: {fname}\n"
-                        f"[EXE] Формат: {fmt}\n"
-                        f"🐍 Python: {report.get('python_version', 'неизвестно')}\n"
-                        f"🧩 PE секций: {len(report.get('pe_sections', []))}\n"
-                        f"📁 Извлечено файлов: {len(results)}\n"
-                        f"🔍 B64 блоков найдено: {len(report.get('base64_blobs', []))}\n"
+                        f"[DEEP] ЗАВЕРШЁН\n\n"
+                        f"Файл: {fname}\n"
+                        f"Формат: {fmt}\n"
+                        f"Python: {report.get('python_version', 'неизвестно')}\n"
+                        f"PE секций: {len(report.get('pe_sections', []))}\n"
+                        f"Извлечено файлов: {len(results)}\n"
                     )
-                    if report.get('python_strings'):
-                        header += f"\n🐍 Python строки: {', '.join(report['python_strings'][:3])}\n"
                     _edit(msg.chat.id, wait.message_id, header)
                     for name, content, method in results[:15]:
                         if isinstance(content, bytes): content = content.decode('utf-8', errors='replace')
@@ -2361,12 +1933,8 @@ def handle_document(msg):
                 else:
                     results, fmt = v3_deobfuscate_binary(downloaded, fname)
                     _edit(msg.chat.id, wait.message_id,
-                        f"╔══════════════════════════════╗\n"
-                        f"║  [+] РАСПАКОВАНО!              ║\n"
-                        f"╚══════════════════════════════╝\n\n"
-                        f"[FILE] {fname}\n"
-                        f"[EXE] Формат: {fmt}\n"
-                        f"📁 Файлов: {len(results)}")
+                        f"[+] РАСПАКОВАНО!\n\n"
+                        f"Файл: {fname}\nФормат: {fmt}\nФайлов: {len(results)}")
                     for name, content in results[:10]:
                         if isinstance(content, bytes): content = content.decode('utf-8', errors='replace')
                         out_path = f"/tmp/v3_{name}"
@@ -2382,10 +1950,10 @@ def handle_document(msg):
 
             # ── Python .py ──
             if not fname.endswith(".py"):
-                _edit(msg.chat.id, wait.message_id, f"[EXE] Пробую как бинарный файл...\n[FILE] {fname}")
+                _edit(msg.chat.id, wait.message_id, f"[EXE] Пробую как бинарный файл...")
                 results, fmt = v3_deobfuscate_binary(downloaded, fname)
                 if results and fmt != "unknown":
-                    _edit(msg.chat.id, wait.message_id, f"[+] Распаковано! Формат: {fmt}")
+                    _edit(msg.chat.id, wait.message_id, f"[+] Формат: {fmt}")
                     for name, content in results[:5]:
                         if isinstance(content, bytes): content = content.decode('utf-8', errors='replace')
                         out_path = f"/tmp/v3_{name}"
@@ -2408,65 +1976,139 @@ def handle_document(msg):
                 _edit(msg.chat.id, wait.message_id, "[SCAN] Анализирую...")
                 detected = full_detect_obfuscation(code)
                 info = analysis
-
-                bar_length = 20
                 score = info['obf_score']
-                filled = int(bar_length * score / 100)
-                bar = "█" * filled + "░" * (bar_length - filled)
-
+                bar = "█" * int(20 * score / 100) + "░" * (20 - int(20 * score / 100))
                 text = (
-                    "╔══════════════════════════════╗\n"
-                    "║  [SCAN] ПОЛНЫЙ АНАЛИЗ КОДА       ║\n"
-                    "╚══════════════════════════════╝\n\n"
-                    f"[FILE] Файл: {fname}\n"
-                    f"📏 Строк: {info['lines']:,}  |  Символов: {info['chars']:,}\n\n"
-                    f"[FIX] Структура:\n"
-                    f"  Функций:   {info['functions']}\n"
-                    f"  Классов:   {info['classes']}\n"
-                    f"  Импортов:  {info['imports']}\n\n"
-                    f"⚠️ Признаки обфускации:\n"
-                    f"  exec():     {info['exec_calls']}\n"
-                    f"  eval():     {info['eval_calls']}\n"
-                    f"  lambda:     {info['lambdas']}\n"
-                    f"  base64:     {info['base64_blobs']}\n"
-                    f"  hex-стр:   {info['hex_strings']}\n"
-                    f"  unicode:    {info['unicode_names']}\n"
-                    f"  XOR (^):    {info['xor_ops']}\n"
-                    f"  Энтропия:  {info['entropy']:.2f} bpb\n\n"
-                    f"[STAT] Уровень обфускации:\n"
-                    f"  [{bar}] {score}%\n"
+                    "[SCAN] ПОЛНЫЙ АНАЛИЗ\n\n"
+                    f"Файл: {fname}\n"
+                    f"Строк: {info['lines']:,} | Символов: {info['chars']:,}\n\n"
+                    f"Структура:\n"
+                    f"  Функций:  {info['functions']}\n"
+                    f"  Классов:  {info['classes']}\n"
+                    f"  Импортов: {info['imports']}\n\n"
+                    f"Признаки обфускации:\n"
+                    f"  exec:    {info['exec_calls']}\n"
+                    f"  eval:    {info['eval_calls']}\n"
+                    f"  lambda:  {info['lambdas']}\n"
+                    f"  base64:  {info['base64_blobs']}\n"
+                    f"  hex-стр: {info['hex_strings']}\n"
+                    f"  XOR(^):  {info['xor_ops']}\n"
+                    f"  Энтроп: {info['entropy']:.2f} bpb\n\n"
+                    f"Уровень: [{bar}] {score}%\n"
                     f"  {info['obf_level']}\n\n"
-                    f"🎯 Обнаружено:\n  " + "\n  ".join(f"• {d}" for d in detected) + "\n\n"
-                    f"💡 Рекомендация: /deobf (OMEGA АВТО)"
+                    f"Обнаружено:\n  " + "\n  ".join(f"* {d}" for d in detected) + "\n\n"
+                    f"Используй /multi для многопроходного декода"
                 )
                 _edit(msg.chat.id, wait.message_id, text)
                 return
 
+            # ── MULTI-PASS — НОВЫЙ РЕЖИМ ──
+            if state == "waiting_multi":
+                _edit(msg.chat.id, wait.message_id,
+                    f"[MULTI] Многопроходный декод\n"
+                    f"Файл: {fname}\n"
+                    f"Строк: {lines_in:,} | Символов: {chars_in:,}\n"
+                    f"Уровень: {analysis['obf_level']}\n\n"
+                    f"[#---------] 0%\n"
+                    f"Запускаю анализ слоёв...")
+
+                # Первичная проверка — что там есть
+                initial_obf = detect_remaining_obfuscation(code)
+                if not initial_obf:
+                    _edit(msg.chat.id, wait.message_id,
+                        "[MULTI] Обфускация не обнаружена.\n\n"
+                        f"Файл: {fname}\n"
+                        "Файл уже чистый или метод не поддерживается.")
+                    return
+
+                _edit(msg.chat.id, wait.message_id,
+                    f"[MULTI] Обнаружено {len(initial_obf)} видов защиты:\n"
+                    + "\n".join(f"  * {o}" for o in initial_obf[:8])
+                    + f"\n\n[##--------] 20%\nЗапускаю pass 1...")
+
+                # Запускаем многопроходный декод
+                final_code, passes_log, total_method = multipass_deobfuscate(code, max_passes=5)
+
+                # Формируем отчёт о каждом проходе
+                passes_done = len(passes_log)
+                report_lines = [
+                    f"[MULTI] ЗАВЕРШЕНО — {passes_done} проходов\n",
+                    f"Файл: {fname}",
+                    f"Исходно: {lines_in:,} строк | {chars_in:,} символов",
+                    f"Итого:   {final_code.count(chr(10))+1:,} строк | {len(final_code):,} символов",
+                    "",
+                ]
+                for p in passes_log:
+                    status = "[+] изменён" if p['changed'] else "[-] без изм"
+                    rem_count = len(p['remaining'])
+                    rem_str = f", осталось: {', '.join(p['remaining'][:3])}" if p['remaining'] else ", чисто!"
+                    report_lines.append(
+                        f"  Pass {p['pass']}: {status} | {p['method']}{rem_str}"
+                    )
+                report_lines.append(f"\n{DIV}")
+                report_lines.append(f"Метод: {total_method}")
+
+                _edit(msg.chat.id, wait.message_id, "\n".join(report_lines))
+
+                # Отправляем каждый промежуточный результат отдельным файлом
+                # Pass 1, 2, 3...
+                intermediate_code = code
+                for p_idx, p_data in enumerate(passes_log):
+                    if not p_data['changed']:
+                        continue
+                    # Применяем тот же проход для получения промежуточного файла
+                    intermediate_code, _ = apply_single_pass(intermediate_code, p_data['pass'])
+                    pass_fname = f"pass{p_data['pass']}_{fname}"
+                    out_path = f"/tmp/{pass_fname}"
+                    with open(out_path, "w", encoding="utf-8") as f: f.write(intermediate_code)
+                    with open(out_path, "rb") as f:
+                        rem_str = ", ".join(p_data['remaining'][:3]) if p_data['remaining'] else "чисто"
+                        bot.send_document(msg.chat.id, f, visible_file_name=pass_fname,
+                            caption=(
+                                f"[MULTI] Pass {p_data['pass']} / {passes_done}\n"
+                                f"Метод: {p_data['method']}\n"
+                                f"Строк: {p_data['lines']:,}\n"
+                                f"Осталось защит: {rem_str}\n"
+                                f"@ArrhythmiaFucks"
+                            ))
+                    try: os.remove(out_path)
+                    except: pass
+
+                # Финальный результат
+                _send_result(msg.chat.id, wait.message_id, final_code, fname,
+                             f"MULTI({passes_done} passes): {total_method}", lines_in, chars_in, "multi_")
+                record_stat(f"multi:{total_method}", chars_in)
+
+                key = str(uid)
+                if key in allowed_users:
+                    allowed_users[key]["uses"] = allowed_users[key].get("uses", 0) + 1
+                    save_users()
+                return
+
             # ── Только v4 ──
             if state == "waiting_v4":
-                _edit(msg.chat.id, wait.message_id,
-                    f"[NEW] v4 OMEGA — обрабатываю...\n[FILE] {fname}")
+                _edit(msg.chat.id, wait.message_id, f"[NEW] v4 OMEGA...\nФайл: {fname}")
                 result = v4_deobfuscate_source(code)
                 _send_result(msg.chat.id, wait.message_id, result, doc.file_name,
-                             "v4 OMEGA (15 exclusive techniques)", lines_in, chars_in, "v4_")
+                             "v4 OMEGA", lines_in, chars_in, "v4_")
                 record_stat("v4", chars_in)
                 return
 
             # ── Только v3 строки ──
             if state == "waiting_v3src":
-                _edit(msg.chat.id, wait.message_id, f"[FIX] v3 Строки...\n[FILE] {fname}")
+                _edit(msg.chat.id, wait.message_id, f"[v3] Строки...\nФайл: {fname}")
                 result = v3_deobfuscate_source(code)
                 _send_result(msg.chat.id, wait.message_id, result, doc.file_name,
-                             "v3 (MBA/chr/hex/ROT13/unicode)", lines_in, chars_in, "v3src_")
+                             "v3 (MBA/chr/hex/ROT13)", lines_in, chars_in, "v3src_")
                 record_stat("v3", chars_in)
                 return
 
             # ── Только v2 ──
             if state == "waiting_v2":
                 _edit(msg.chat.id, wait.message_id,
-                    f"🧠 Ренди 2.0...\n[FILE] {fname}\n"
-                    f"[STAT] Строк: {lines_in} | Символов: {chars_in:,}\n"
-                    f"🔎 Уровень: {analysis['obf_level']}")
+                    f"[v2] Ренди 2.0...\n"
+                    f"Файл: {fname}\n"
+                    f"Строк: {lines_in} | Символов: {chars_in:,}")
                 result = rendy2_deobfuscate(code)
                 _send_result(msg.chat.id, wait.message_id, result, doc.file_name,
                              "v2 (Ренди 2.0)", lines_in, chars_in, "rendy2_")
@@ -2475,7 +2117,7 @@ def handle_document(msg):
 
             # ── Только v1 ──
             if state == "waiting":
-                _edit(msg.chat.id, wait.message_id, f"🔓 v1 анализ...\n[FILE] {fname}")
+                _edit(msg.chat.id, wait.message_id, f"[v1] анализ...\nФайл: {fname}")
                 result, info_v1 = deobfuscate_code(code)
                 if result:
                     _send_result(msg.chat.id, wait.message_id, result, doc.file_name,
@@ -2484,33 +2126,22 @@ def handle_document(msg):
                 else:
                     _edit(msg.chat.id, wait.message_id,
                         f"[-] v1 не смог: {info_v1}\n\n"
-                        f"Попробуй /deobf (OMEGA АВТО)")
+                        f"Попробуй /multi или /deobf (OMEGA АВТО)")
                 return
 
             # ── АВТО OMEGA ──
-            progress_bar = lambda p: "█" * int(p/5) + "░" * (20 - int(p/5))
             _edit(msg.chat.id, wait.message_id,
-                f"╔══════════════════════════════╗\n"
-                f"║  [*] OMEGA АВТО СТАРТ         ║\n"
-                f"╚══════════════════════════════╝\n\n"
-                f"[FILE] {fname}\n"
-                f"[STAT] Строк: {lines_in:,} | Символов: {chars_in:,}\n"
-                f"🎯 Уровень: {analysis['obf_level']}\n\n"
-                f"[{progress_bar(0)}] 0%\n"
-                f"⠋ Запускаю конвейер...")
-
-            time.sleep(0.5)
-            _edit(msg.chat.id, wait.message_id,
-                f"[FILE] {fname}\n"
-                f"[{progress_bar(25)}] 25%\n"
-                f"⠹ v1 → v4 → v3 → v2...")
+                f"[*] OMEGA АВТО\n"
+                f"Файл: {fname}\n"
+                f"Строк: {lines_in:,} | Символов: {chars_in:,}\n"
+                f"Уровень: {analysis['obf_level']}\n\n"
+                f"[##--------] 20%\n"
+                f"v1 → v4 → v3 → v2...")
 
             result, method, stats = auto_deobfuscate_source(code)
 
             _edit(msg.chat.id, wait.message_id,
-                f"[FILE] {fname}\n"
-                f"[{progress_bar(90)}] 90%\n"
-                f"⠧ Финализирую...")
+                f"[##########] 90%\nФинализирую...")
 
             _send_result(msg.chat.id, wait.message_id, result, doc.file_name,
                          f"OMEGA: {method}", lines_in, chars_in, "omega_")
@@ -2557,7 +2188,7 @@ def _send_result(chat_id, msg_id, result, orig_name, method, lines_in, chars_in,
 
 
 # ══════════════════════════════════════════════════════════════
-#   CALLBACK — ПРОВЕРКА ПОДПИСКИ НА КАНАЛ
+#   CALLBACK — ПОДПИСКА
 # ══════════════════════════════════════════════════════════════
 @bot.callback_query_handler(func=lambda c: c.data == "check_sub")
 def on_check_sub(call):
@@ -2565,7 +2196,6 @@ def on_check_sub(call):
     name  = call.from_user.first_name or "анон"
     uname = getattr(call.from_user, "username", "") or ""
 
-    # Если уже в whitelist — просто пускаем
     if is_allowed(uid):
         bot.answer_callback_query(call.id, "[+] Access already granted!")
         try:
@@ -2575,51 +2205,44 @@ def on_check_sub(call):
         except: pass
         return
 
-    # Если канал публичный — пробуем проверить через API
     if CHANNEL_ID:
         try:
             member = bot.get_chat_member(CHANNEL_ID, uid)
             if member.status in ("member", "administrator", "creator"):
-                # Автоматически выдаём доступ
                 allowed_users[str(uid)] = {
                     "username": uname, "first_name": name,
                     "added": ts(), "uses": 0, "source": "channel_auto"
                 }
                 save_users()
                 pending_subscribe.pop(uid, None)
-                bot.answer_callback_query(call.id, "[+] Subscription confirmed! Access granted!")
+                bot.answer_callback_query(call.id, "[+] Confirmed! Access granted!")
                 try:
                     bot.edit_message_text(
-                        f"[+] Доступ открыт автоматически!\n\n"
-                        f"Используй /start, {name}! [!]",
+                        f"[+] Доступ открыт!\nИспользуй /start, {name}!",
                         call.message.chat.id, call.message.message_id)
                 except: pass
                 return
             else:
-                bot.answer_callback_query(call.id, "[-] Ты не подписан на канал!", show_alert=True)
+                bot.answer_callback_query(call.id, "[-] Ты не подписан!", show_alert=True)
                 return
         except: pass
 
-    # Приватный канал — отправляем заявку админу
     pending_subscribe[uid] = {"name": name, "username": uname, "ts": ts()}
-    bot.answer_callback_query(call.id, "[REQ] Заявка отправлена администратору!")
+    bot.answer_callback_query(call.id, "[REQ] Заявка отправлена!")
 
     uname_str = f"@{uname}" if uname else f"ID: {uid}"
     admin_text = (
-        f"╔══════════════════════════════╗\n"
-        f"║  [REQ]  NEW ACCESS REQUEST  ║\n"
-        f"╚══════════════════════════════╝\n\n"
-        f"[USR] Имя:     {name}\n"
-        f"[USR] Юзер:   {uname_str}\n"
-        f"[ID] ID:      {uid}\n"
-        f"[TIME] Время:  {ts()}\n\n"
-        f"To grant access:\n"
+        f"[REQ] NEW ACCESS REQUEST\n\n"
+        f"Имя:  {name}\n"
+        f"Юзер: {uname_str}\n"
+        f"ID:   {uid}\n"
+        f"Время: {ts()}\n\n"
         f"/add {uid} {name}"
     )
     kb_admin_approve = telebot.types.InlineKeyboardMarkup()
     kb_admin_approve.row(
-        telebot.types.InlineKeyboardButton(f"[+] Выдать доступ", callback_data=f"approve_{uid}_{name[:15]}"),
-        telebot.types.InlineKeyboardButton(f"[-] Отказать",      callback_data=f"deny_{uid}")
+        telebot.types.InlineKeyboardButton(f"[+] Выдать", callback_data=f"approve_{uid}_{name[:15]}"),
+        telebot.types.InlineKeyboardButton(f"[-] Отказать", callback_data=f"deny_{uid}")
     )
     for admin_id in ADMIN_IDS:
         try: bot.send_message(admin_id, admin_text, reply_markup=kb_admin_approve)
@@ -2627,13 +2250,9 @@ def on_check_sub(call):
 
     try:
         bot.edit_message_text(
-            f"╔══════════════════════════════╗\n"
-            f"║  [REQ]  REQUEST SENT  [REQ]   ║\n"
-            f"╚══════════════════════════════╝\n\n"
-            f"Your request was sent to {ADMIN_USERNAME}\n\n"
-            f"[WAIT] Waiting for admin approval...\n\n"
-            f"{DIV}\n"
-            f"[!] sicksilent deobf",
+            f"[REQ] ЗАЯВКА ОТПРАВЛЕНА\n\n"
+            f"Отправлена {ADMIN_USERNAME}\n\n"
+            f"[WAIT] Ждём подтверждения...",
             call.message.chat.id, call.message.message_id)
     except: pass
 
@@ -2664,15 +2283,13 @@ def on_admin_approve(call):
         bot.answer_callback_query(call.id, f"[+] Доступ выдан {target_name}!")
         try:
             bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
-            bot.send_message(call.message.chat.id, f"[+] [+] Access granted: {target_id} ({target_name})")
+            bot.send_message(call.message.chat.id, f"[+] Access granted: {target_id} ({target_name})")
         except: pass
         try:
             bot.send_message(target_id,
-                f"╔══════════════════════════════╗\n"
-                f"║  [+]  ДОСТУП ОТКРЫТ!  [+]      ║\n"
-                f"╚══════════════════════════════╝\n\n"
-                f"[!] Добро пожаловать в sicksilent deobf!\n\n"
-                f"Используй /start 🔓")
+                f"[+] ДОСТУП ОТКРЫТ!\n\n"
+                f"Добро пожаловать в sicksilent deobf!\n"
+                f"Используй /start")
         except: pass
 
     elif action == "deny":
@@ -2681,17 +2298,16 @@ def on_admin_approve(call):
         bot.answer_callback_query(call.id, "[-] Заявка отклонена")
         try:
             bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
-            bot.send_message(call.message.chat.id, f"[-] [-] Denied: {target_id}")
+            bot.send_message(call.message.chat.id, f"[-] Denied: {target_id}")
         except: pass
         try:
             bot.send_message(target_id,
-                f"[-] Твоя заявка отклонена.\n"
-                f"По вопросам: {ADMIN_USERNAME}")
+                f"[-] Твоя заявка отклонена.\nПо вопросам: {ADMIN_USERNAME}")
         except: pass
 
 
 # ══════════════════════════════════════════════════════════════
-#   CALLBACK КНОПКИ
+#   CALLBACK КНОПКИ РЕЖИМОВ
 # ══════════════════════════════════════════════════════════════
 @bot.callback_query_handler(func=lambda c: c.data.startswith("deobf_"))
 def on_deobf_callback(call):
@@ -2700,6 +2316,7 @@ def on_deobf_callback(call):
 
     action_map = {
         "deobf_auto":   "waiting_auto",
+        "deobf_multi":  "waiting_multi",
         "deobf_detect": "waiting_detect",
         "deobf_v1":     "waiting",
         "deobf_v2":     "waiting_v2",
@@ -2713,11 +2330,12 @@ def on_deobf_callback(call):
         _deobf_state[uid] = state
         prompts = {
             "waiting_auto":   "[*] OMEGA АВТО — отправь .py файл:",
+            "waiting_multi":  "[MULTI] Многопроходный — отправь .py файл:",
             "waiting_detect": "[SCAN] Анализ — отправь .py файл:",
-            "waiting":        "🔓 v1 — отправь .py файл:",
-            "waiting_v2":     "🧠 Ренди 2.0 — отправь .py файл:",
-            "waiting_v3src":  "[FIX] v3 Строки — отправь .py файл:",
-            "waiting_v3bin":  "[EXE] EXE/Binary — отправь .exe / .pyc / .pyz:",
+            "waiting":        "[v1] — отправь .py файл:",
+            "waiting_v2":     "[v2] Ренди 2.0 — отправь .py файл:",
+            "waiting_v3src":  "[v3] Строки — отправь .py файл:",
+            "waiting_v3bin":  "[EXE] EXE/Binary — отправь .exe / .pyc:",
             "waiting_v4":     "[NEW] v4 OMEGA — отправь .py файл:",
             "waiting_deep":   "[DEEP] Deep Scan — отправь .exe / .pyc:",
         }
@@ -2730,9 +2348,10 @@ def on_deobf_callback(call):
 #   ReplyKeyboard кнопки
 # ══════════════════════════════════════════════════════════════
 @bot.message_handler(func=lambda m: m.text in [
-    "🔓 АВТО ДЕКОД", "[SCAN] Анализ файла", "[EXE] EXE / Binary",
-    "[DEEP] Глубокое сканирование", "🔓 v1 lambda", "🔓 v2 Ренди",
-    "[FIX] v3 Строки", "[NEW] v4 OMEGA", "[STAT] Моя статистика"
+    "[*] АВТО ДЕКОД", "[SCAN] Анализ файла", "[EXE] EXE / Binary",
+    "[DEEP] Глубокое сканирование", "[v1] lambda", "[v2] Ренди",
+    "[v3] Строки", "[NEW] v4 OMEGA", "[STAT] Моя статистика",
+    "[MULTI] Многопроходный"
 ])
 @access_required
 def handle_menu_button(msg):
@@ -2741,26 +2360,28 @@ def handle_menu_button(msg):
         cmd_stats(msg); return
 
     state_map = {
-        "🔓 АВТО ДЕКОД":          "waiting_auto",
+        "[*] АВТО ДЕКОД":             "waiting_auto",
+        "[MULTI] Многопроходный":     "waiting_multi",
         "[SCAN] Анализ файла":        "waiting_detect",
-        "[EXE] EXE / Binary":        "waiting_v3bin",
+        "[EXE] EXE / Binary":         "waiting_v3bin",
         "[DEEP] Глубокое сканирование": "waiting_deep",
-        "🔓 v1 lambda":           "waiting",
-        "🔓 v2 Ренди":            "waiting_v2",
-        "[FIX] v3 Строки":           "waiting_v3src",
-        "[NEW] v4 OMEGA":            "waiting_v4",
+        "[v1] lambda":                "waiting",
+        "[v2] Ренди":                 "waiting_v2",
+        "[v3] Строки":                "waiting_v3src",
+        "[NEW] v4 OMEGA":             "waiting_v4",
     }
     state = state_map.get(msg.text)
     if state:
         _deobf_state[uid] = state
         prompts = {
             "waiting_auto":   "[*] OMEGA АВТО — отправь .py файл:",
+            "waiting_multi":  "[MULTI] Многопроходный — отправь .py файл:",
             "waiting_detect": "[SCAN] Анализ — отправь .py файл:",
             "waiting_v3bin":  "[EXE] EXE/Binary — отправь .exe / .pyc:",
             "waiting_deep":   "[DEEP] Deep Scan — отправь .exe / .pyc:",
-            "waiting":        "🔓 v1 — отправь .py файл:",
-            "waiting_v2":     "🧠 Ренди 2.0 — отправь .py файл:",
-            "waiting_v3src":  "[FIX] v3 Строки — отправь .py файл:",
+            "waiting":        "[v1] — отправь .py файл:",
+            "waiting_v2":     "[v2] Ренди 2.0 — отправь .py файл:",
+            "waiting_v3src":  "[v3] Строки — отправь .py файл:",
             "waiting_v4":     "[NEW] v4 OMEGA — отправь .py файл:",
         }
         bot.send_message(msg.chat.id, prompts[state], reply_markup=kb_deobf())
@@ -2778,43 +2399,34 @@ def cmd_admin(msg):
     total_decoded = global_stats.get('total_decoded', 0)
     bot.send_message(msg.chat.id,
         BANNER_ADMIN() + "\n\n"
-        f"[USERS] Пользователей:  {total}\n"
-        f"[BAN] Заблокировано:  {banned_count}\n"
-        f"[REQ] Заявок:         {pend_count}\n"
-        f"🔓 Декодировано:   {total_decoded}\n\n"
+        f"Пользователей: {total}\n"
+        f"Заблокировано: {banned_count}\n"
+        f"Заявок:        {pend_count}\n"
+        f"Декодировано:  {total_decoded}\n\n"
         f"{DIV}\n"
-        f"[*] Команды:\n"
-        f"  /add ID [имя]  — выдать доступ\n"
-        f"  /remove ID     — забрать доступ\n"
-        f"  /ban ID        — заблокировать\n"
-        f"  /unban ID      — разблокировать\n"
-        f"  /users         — список юзеров\n"
-        f"  /pending       — заявки на доступ\n"
-        f"  /broadcast     — рассылка всем", parse_mode='Markdown')
+        f"Команды:\n"
+        f"  /add ID [имя]\n"
+        f"  /remove ID\n"
+        f"  /ban ID\n"
+        f"  /unban ID\n"
+        f"  /users\n"
+        f"  /pending\n"
+        f"  /broadcast <текст>", parse_mode='Markdown')
 
 
 @bot.message_handler(commands=["pending"])
 def cmd_pending(msg):
     if not is_admin(msg.from_user.id): return
     if not pending_subscribe:
-        bot.send_message(msg.chat.id,
-            BANNER_ADMIN() + "\n\n"
-            "📭 No pending requests.\n\n"
-            "All users confirmed [!]", parse_mode='Markdown')
-        return
-    text = (
-        f"╔══════════════════════════════╗\n"
-        f"║  [REQ]  ЗАЯВКИ НА ДОСТУП  [REQ]   ║\n"
-        f"╚══════════════════════════════╝\n\n"
-        f"Всего: {len(pending_subscribe)}\n\n"
-    )
+        bot.send_message(msg.chat.id, "Нет заявок."); return
+    text = f"ЗАЯВКИ: {len(pending_subscribe)}\n\n"
     kb = telebot.types.InlineKeyboardMarkup()
     for uid, info in list(pending_subscribe.items())[:10]:
         uname = info.get("username", "")
         name  = info.get("name", f"user_{uid}")
         t     = info.get("ts", "")
         uname_str = f"@{uname}" if uname else str(uid)
-        text += f"[USR] {name} | {uname_str} | {t}\n"
+        text += f"{name} | {uname_str} | {t}\n"
         safe_name = name[:15]
         kb.row(
             telebot.types.InlineKeyboardButton(f"[+] {name[:12]}", callback_data=f"approve_{uid}_{safe_name}"),
@@ -2832,7 +2444,7 @@ def cmd_add(msg):
         allowed_users[str(target_id)] = {"username": "", "first_name": name, "added": ts(), "uses": 0}
         save_users()
         bot.send_message(msg.chat.id, f"[+] Доступ выдан: {target_id} ({name})")
-        try: bot.send_message(target_id, f"[+] Тебе выдан доступ к OMEGA DEOBF!\nИспользуй /start ")
+        try: bot.send_message(target_id, f"[+] Тебе выдан доступ!\nИспользуй /start")
         except: pass
     except ValueError: bot.send_message(msg.chat.id, "[-] Неверный ID")
 
@@ -2843,7 +2455,7 @@ def cmd_remove(msg):
     if len(parts) < 2: bot.send_message(msg.chat.id, "Использование: /remove ID"); return
     try:
         target_id = str(int(parts[1]))
-        if target_id in allowed_users: del allowed_users[target_id]; save_users(); bot.send_message(msg.chat.id, f"[+] Доступ забран: {target_id}")
+        if target_id in allowed_users: del allowed_users[target_id]; save_users(); bot.send_message(msg.chat.id, f"[+] Забрал: {target_id}")
         else: bot.send_message(msg.chat.id, f"[-] {target_id} не найден")
     except ValueError: bot.send_message(msg.chat.id, "[-] Неверный ID")
 
@@ -2872,22 +2484,15 @@ def cmd_unban(msg):
 def cmd_users(msg):
     if not is_admin(msg.from_user.id): return
     if not allowed_users:
-        bot.send_message(msg.chat.id, BANNER_ADMIN() + "\n\nList is empty.", parse_mode='Markdown'); return
-    header = (
-        f"+------  USERS : SICKSILENT DEOBF  ------+\n"
-        f"Total: {len(allowed_users)}\n"
-        f"{DIV}\n"
-    )
-    lines = [header]
+        bot.send_message(msg.chat.id, "Список пуст."); return
+    lines = [f"USERS: {len(allowed_users)}\n{DIV}\n"]
     for uid, info in list(allowed_users.items())[:50]:
         banned_mark = "[BAN]" if uid in banned_users else "[+]"
         name  = info.get('first_name', '') or uid
         uname = info.get('username', '')
         uses  = info.get('uses', 0)
-        src   = info.get('source', '')
-        src_badge = " [chan]" if "channel" in src else " [admin]" if "admin" in src else ""
         uname_str = f" @{uname}" if uname else ""
-        lines.append(f"{banned_mark} {uid}{uname_str} — {name}{src_badge} [{uses} файлов]\n")
+        lines.append(f"{banned_mark} {uid}{uname_str} — {name} [{uses} файлов]\n")
     bot.send_message(msg.chat.id, "".join(lines))
 
 @bot.message_handler(commands=["broadcast"])
@@ -2896,21 +2501,12 @@ def cmd_broadcast(msg):
     parts = msg.text.split(maxsplit=1)
     if len(parts) < 2:
         bot.send_message(msg.chat.id, "Usage: /broadcast <text>"); return
-    text = (
-        f"+------------------------------------------+\n"
-        f"| [BROADCAST] sicksilent deobf             |\n"
-        f"+------------------------------------------+\n\n"
-        f"{parts[1]}\n\n"
-        f"[ @ArrhythmiaFucks ]"
-    )
+    text = f"[BROADCAST] sicksilent deobf\n{DIV}\n\n{parts[1]}\n\n[ @ArrhythmiaFucks ]"
     sent = 0; failed = 0
     for uid in allowed_users:
         try: bot.send_message(int(uid), text); sent += 1; time.sleep(0.05)
         except: failed += 1
-    bot.send_message(msg.chat.id,
-        f"[+] Broadcast done\n"
-        f"  Sent: {sent}\n"
-        f"  Failed: {failed}")
+    bot.send_message(msg.chat.id, f"[+] Done\nSent: {sent}\nFailed: {failed}")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -2918,32 +2514,32 @@ def cmd_broadcast(msg):
 # ══════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     print()
-    print(" ___ ___ ___ _  __ ___ ___ _   ___ _  _ _____ ")
-    print("/ __|_ _/ __| |/ // __/ __| | | __| \\| |_   _|")
-    print("\\__ \\| | (__ | ' <\\__ \\ __ \\ | | _|| .` | | |  ")
-    print("|___/|_|\\___||_|\\_|___/___/_| |___|_|\\_| |_|")
-    print()
     print("+------------------------------------------------+")
-    print("|        SICKSILENT DEOBF  v3.0 OMEGA           |")
+    print("|        SICKSILENT DEOBF  v3.1 OMEGA           |")
     print("|        50+ Python Decode Techniques           |")
+    print("|        + MULTI-PASS DECODER                   |")
     print("+------------------------------------------------+")
-    print("║                                                          ║")
-    print("║   ░██████╗ ██╗ ██████╗██╗  ██╗███████╗██╗██╗     ███████╗███╗  ██╗████████╗  ║")
-    print("║                                                          ║")
-    print("║   [!]  S I C K S I L E N T   D E O B F  [!]              ║")
-    print("║   [*]  v3.0 OMEGA  —  50+ техник декодирования  [*]       ║")
-    print("║                                                          ║")
-    print("║   v1  base64/32/16 + zlib/gzip/lzma + marshal           ║")
-    print("║   v2  Ренди 2.0 — 30+ universal techniques              ║")
-    print("║   v3  MBA/chr/hex/ROT13/unicode/eval/exec               ║")
-    print("║   v4  OMEGA — 15 exclusive new methods                  ║")
-    print("║   EXE 6-method deep scan unpacker                       ║")
-    print("║                                                          ║")
-    print(f"║   Admin:    {ADMIN_USERNAME:<44} ║")
-    print(f"║   Channel:  {CHANNEL_LINK[:44]:<44} ║")
-    print(f"║   Users:    {len(allowed_users):<44} ║")
-    print(f"║   Decoded:  {global_stats.get('total_decoded', 0):<44} ║")
-    print("║                                                          ║")
-    print("╚══════════════════════════════════════════════════════════╝")
+    print(f"|  Admin:   {ADMIN_USERNAME:<38} |")
+    print(f"|  Channel: {CHANNEL_LINK[:38]:<38} |")
+    print(f"|  Users:   {len(allowed_users):<38} |")
+    print(f"|  Decoded: {global_stats.get('total_decoded', 0):<38} |")
+    print("+------------------------------------------------+")
     print()
+
+    # Отправляем фото логотипа администратору при старте бота
+    if os.path.exists(WELCOME_PHOTO):
+        def _send_startup_photo():
+            time.sleep(3)  # Ждём пока бот запустится
+            for admin_id in ADMIN_IDS:
+                try:
+                    with open(WELCOME_PHOTO, "rb") as f:
+                        bot.send_photo(admin_id, f,
+                            caption=f"[+] sicksilent deobf v{BOT_VERSION} запущен!\n"
+                                    f"Users: {len(allowed_users)}\n"
+                                    f"Decoded: {global_stats.get('total_decoded', 0)}")
+                except Exception as e:
+                    print(f"[startup] photo err: {e}")
+        threading.Thread(target=_send_startup_photo, daemon=True).start()
+
+    print("[*] Starting bot polling...")
     bot.infinity_polling(timeout=30, long_polling_timeout=20)
