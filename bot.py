@@ -25,6 +25,14 @@ from typing import Optional
 # ══════════════════════════════════════════════════════════════
 TOKEN     = "8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30"
 ADMIN_IDS = {7321093872}
+ADMIN_USERNAME = "@ArrhythmiaFucks"
+
+# ── Подписка на канал ──────────────────────────────────────────
+# Канал приватный — проверка по invite-link через Bot API недоступна.
+# Схема: пользователь нажимает "✅ Я подписался" → бот отправляет
+# заявку админу, тот выдаёт доступ через /add ID
+CHANNEL_LINK = "https://t.me/+p5w4sYOREc0zZTRi"
+CHANNEL_ID   = None   # Если публичный — "@channel_username"
 
 USERS_FILE  = "allowed_users.json"
 BANNED_FILE = "banned_users.json"
@@ -32,7 +40,7 @@ BANNED_FILE = "banned_users.json"
 WELCOME_PHOTO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "astolfo.png")
 
 BOT_VERSION = "3.0 OMEGA"
-BOT_NAME    = "🔓 DEOBF OMEGA"
+BOT_NAME    = "💀 SICKSILENT DEOBF"
 
 # ══════════════════════════════════════════════════════════════
 #                  ДОСТУП / WHITELIST / STATS
@@ -77,13 +85,32 @@ def record_stat(method: str, bytes_in: int):
 def access_required(fn):
     def wrapper(msg):
         uid = msg.from_user.id
-        if not is_allowed(uid):
+        if is_banned(uid):
             bot.send_message(msg.chat.id,
-                "╔══════════════════╗\n"
-                "║  🔒 ACCESS DENIED ║\n"
-                "╚══════════════════╝\n\n"
-                "Этот бот работает по инвайтам~\n"
-                "Обратись к администратору 💕")
+                "🚫 Ты заблокирован.\n"
+                f"Если считаешь ошибкой — напиши {ADMIN_USERNAME}")
+            return
+        if not is_allowed(uid):
+            name = msg.from_user.first_name or "анон"
+            uname = getattr(msg.from_user, "username", "") or ""
+            # Сохраняем заявку
+            pending_subscribe[uid] = {
+                "name": name, "username": uname, "ts": ts()
+            }
+            bot.send_message(
+                msg.chat.id,
+                f"{BANNER_LOCKED}\n\n"
+                f"👋 Привет, {name}!\n\n"
+                f"💀 Для использования бота нужно:\n\n"
+                f"  1️⃣  Подписаться на канал\n"
+                f"  2️⃣  Нажать «✅ Я подписался»\n"
+                f"  3️⃣  Дождаться подтверждения\n"
+                f"      от {ADMIN_USERNAME}\n\n"
+                f"{DIV}\n"
+                f"📢 Канал: {CHANNEL_LINK}\n"
+                f"{DIV}",
+                reply_markup=kb_subscribe()
+            )
             return
         return fn(msg)
     wrapper.__name__ = fn.__name__
@@ -1674,12 +1701,11 @@ def exe_extract_all(data: bytes, filename: str) -> list:
 def calc_entropy(data: bytes) -> float:
     """Вычисляет энтропию Шеннона (0-8 бит/байт)."""
     if not data: return 0.0
+    import math
     freq = Counter(data)
     length = len(data)
-    entropy = -sum((c/length) * (c/length).bit_length() for c in freq.values() if c > 0)
-    # Нормализованная энтропия
-    import math
-    return -sum((c/length) * math.log2(c/length) for c in freq.values() if c > 0)
+    # Правильная формула — float не имеет bit_length, используем math.log2
+    return -sum((c / length) * math.log2(c / length) for c in freq.values() if c > 0)
 
 def analyze_code_complexity(source: str) -> dict:
     """Анализирует сложность и характеристики кода."""
@@ -1798,55 +1824,138 @@ def auto_deobfuscate_source(code: str) -> tuple:
 #   ТГ БОТ — ЛЕГЕНДАРНЫЙ ДИЗАЙН
 # ══════════════════════════════════════════════════════════════
 
-# Крутые ASCII баннеры для разных режимов
-BANNER_MAIN = (
-    "╔═══════════════════════════════════╗\n"
-    "║  ██████╗ ███████╗ ██████╗ ██████╗ ║\n"
-    "║  ██╔══██╗██╔════╝██╔═══██╗██╔══██╗║\n"
-    "║  ██║  ██║█████╗  ██║   ██║██████╔╝║\n"
-    "║  ██║  ██║██╔══╝  ██║   ██║██╔══██╗║\n"
-    "║  ██████╔╝███████╗╚██████╔╝██████╔╝║\n"
-    "║  ╚═════╝ ╚══════╝ ╚═════╝ ╚═════╝ ║\n"
-    "║  🔓 OMEGA  v3.0   Astolfo Edition ║\n"
-    "║  (\\(\\  ∧＿∧  💕  50+ TECHNIQUES  ║\n"
-    "║  (｡•ω•｡)つ━━━━━━━━━━━━━━━━━━━━━━ ║\n"
-    "╚═══════════════════════════════════╝"
-)
+# ══════════════════════════════════════════════════════════════
+#   ASCII БАННЕРЫ — SICKSILENT EDITION
+#   Все рамки выровнены ровно, ничего не торчит
+# ══════════════════════════════════════════════════════════════
 
-BANNER_DECODE = (
-    "┌─────────────────────────────┐\n"
-    "│  🔓 DECODING IN PROGRESS... │\n"
-    "│  ▓▓▓▓▓▓▓░░░░░░░░░░░  45%   │\n"
-    "│  Breaking encryption...     │\n"
-    "└─────────────────────────────┘"
-)
+# Ширина контента внутри рамки = 36 символов
+_W = 36
 
-BANNER_SUCCESS = (
-    "╔═══════════════════════════╗\n"
-    "║   ✅ DECODED SUCCESSFULLY ║\n"
-    "║   🌸 ~Astolfo approved~   ║\n"
-    "╚═══════════════════════════╝"
-)
+def _box(lines: list, width: int = _W) -> str:
+    """Строит идеально выровненный box из списка строк."""
+    top    = "╔" + "═" * (width + 2) + "╗"
+    bottom = "╚" + "═" * (width + 2) + "╝"
+    rows   = []
+    for line in lines:
+        # Считаем визуальную ширину (эмодзи = 2 колонки)
+        vis = 0
+        for ch in line:
+            cp = ord(ch)
+            if (0x1F300 <= cp <= 0x1FAFF) or (0x2600 <= cp <= 0x27BF): vis += 2
+            elif cp > 0x2E7F: vis += 2
+            else: vis += 1
+        pad = max(0, width - vis)
+        rows.append("║ " + line + " " * pad + " ║")
+    return "\n".join([top] + rows + [bottom])
 
-BANNER_BINARY = (
-    "╔══════════════════════════════╗\n"
-    "║  📦 EXE UNPACKER OMEGA       ║\n"
-    "║  ► PyInstaller  ✓            ║\n"
-    "║  ► cx_Freeze    ✓            ║\n"
-    "║  ► py2exe       ✓            ║\n"
-    "║  ► zipapp       ✓            ║\n"
-    "║  ► .pyc files   ✓            ║\n"
-    "║  ► Deep scan    ✓            ║\n"
-    "╚══════════════════════════════╝"
-)
+BANNER_MAIN = _box([
+    "░██████╗██╗ ██████╗██╗  ██╗",
+    "██╔════╝██║██╔════╝██║ ██╔╝",
+    "╚█████╗ ██║██║     █████╔╝ ",
+    " ╚═══██╗██║██║     ██╔═██╗ ",
+    "██████╔╝██║╚██████╗██║  ██╗",
+    "╚═════╝ ╚═╝ ╚═════╝╚═╝  ╚═╝",
+    "",
+    "  💀 S I C K S I L E N T 💀  ",
+    "  ⚡ PYTHON DEOBFUSCATOR ⚡  ",
+    "  🔓 v3.0 OMEGA  50+ TECH  ",
+    "",
+    "  (\\(\\  ∧＿∧   💕           ",
+    "  (｡•ω•｡)つ  Astolfo ed.  ",
+], 34)
 
-LOADING_FRAMES = [
-    "⠋ Анализирую...", "⠙ Анализирую...", "⠹ Анализирую...",
-    "⠸ Декодирую...", "⠼ Декодирую...", "⠴ Декодирую...",
-    "⠦ Очищаю...", "⠧ Очищаю...", "⠇ Финализирую...", "⠏ Финализирую..."
-]
+BANNER_SUCCESS = _box([
+    "✅  D E C O D E D  ✅",
+    "",
+    "💀 sicksilent approved 💀",
+    "🌸 ~Astolfo certified~  ",
+], 28)
 
-_deobf_state: dict = {}
+BANNER_FAIL = _box([
+    "❌  DECODE FAILED  ❌",
+    "",
+    "😿 попробуй другой метод",
+], 28)
+
+BANNER_BINARY = _box([
+    "📦  EXE UNPACKER  OMEGA  📦",
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    "✅  PyInstaller",
+    "✅  cx_Freeze",
+    "✅  py2exe",
+    "✅  zipapp / .pyz",
+    "✅  .pyc decompile",
+    "✅  Deep Scan (6 методов)",
+], 30)
+
+BANNER_LOCKED = _box([
+    "🔒  ДОСТУП ЗАКРЫТ  🔒",
+    "",
+    "💀 sicksilent deobf 💀",
+    "Только для подписчиков",
+    "",
+    "👇 Подпишись на канал:",
+], 28)
+
+BANNER_ADMIN = _box([
+    "👑  ADMIN  PANEL  👑",
+    "",
+    "💀 sicksilent deobf 💀",
+], 26)
+
+BANNER_STATS = _box([
+    "📊  СТАТИСТИКА  OMEGA  📊",
+], 26)
+
+BANNER_ANALYZE = _box([
+    "🔬  АНАЛИЗ  КОДА  🔬",
+    "",
+    "💀 sicksilent deobf 💀",
+], 26)
+
+# Прогресс-бар
+def pbar(pct: int, width: int = 20) -> str:
+    filled = int(width * pct / 100)
+    return "█" * filled + "░" * (width - filled)
+
+# Декоративный разделитель
+DIV  = "━" * 32
+DIV2 = "─" * 32
+
+
+# ══════════════════════════════════════════════════════════════
+#   СИСТЕМА ПОДПИСКИ НА КАНАЛ
+# ══════════════════════════════════════════════════════════════
+
+# Словарь ожидающих подтверждения: {user_id: {"name": ..., "username": ..., "ts": ...}}
+pending_subscribe: dict = {}
+
+def check_channel_subscription(user_id: int) -> bool:
+    """
+    Проверяет подписку на канал.
+    Если CHANNEL_ID задан (публичный канал) — проверяем через API.
+    Если None (приватный) — доступ только через whitelist (ручная выдача).
+    """
+    if CHANNEL_ID:
+        try:
+            member = bot.get_chat_member(CHANNEL_ID, user_id)
+            return member.status in ("member", "administrator", "creator")
+        except: pass
+    # Приватный канал — проверяем whitelist
+    return is_allowed(user_id)
+
+def kb_subscribe():
+    """Клавиатура для неподписанных пользователей."""
+    kb = telebot.types.InlineKeyboardMarkup()
+    kb.row(telebot.types.InlineKeyboardButton(
+        "📢 Подписаться на канал", url=CHANNEL_LINK))
+    kb.row(telebot.types.InlineKeyboardButton(
+        "✅ Я подписался — проверить", callback_data="check_sub"))
+    return kb
+
+_deobf_state: dict    = {}
+# pending_subscribe объявлен выше в секции баннеров
 
 
 def _send(chat_id, text, kb=None):
@@ -1890,21 +1999,39 @@ def kb_deobf():
 @bot.message_handler(commands=["start"])
 def cmd_start(msg):
     try:
-        uid  = int(msg.from_user.id)
-        name = msg.from_user.first_name or "анон"
+        uid   = int(msg.from_user.id)
+        name  = msg.from_user.first_name or "анон"
+        uname = getattr(msg.from_user, "username", "") or ""
+
+        if is_banned(uid):
+            bot.send_message(msg.chat.id,
+                f"🚫 Ты заблокирован.\nПо вопросам: {ADMIN_USERNAME}")
+            return
 
         if is_admin(uid):
             key = str(uid)
             if key not in allowed_users:
-                allowed_users[key] = {"username": getattr(msg.from_user, "username", "") or "", "first_name": name, "added": ts(), "uses": 0}
+                allowed_users[key] = {
+                    "username": uname, "first_name": name,
+                    "added": ts(), "uses": 0
+                }
                 save_users()
 
         if not is_allowed(uid):
-            bot.send_message(msg.chat.id,
-                f"{BANNER_MAIN}\n\n"
-                "🔒 Доступ закрыт~\n"
-                "Этот бот работает только по приглашению.\n"
-                "Обратись к администратору 💕")
+            pending_subscribe[uid] = {"name": name, "username": uname, "ts": ts()}
+            bot.send_message(
+                msg.chat.id,
+                f"{BANNER_LOCKED}\n\n"
+                f"👋 Привет, {name}!\n\n"
+                f"💀 Для доступа:\n\n"
+                f"  1️⃣  Подпишись на канал\n"
+                f"  2️⃣  Нажми «✅ Я подписался»\n"
+                f"  3️⃣  Жди подтверждения от {ADMIN_USERNAME}\n\n"
+                f"{DIV}\n"
+                f"📢 {CHANNEL_LINK}\n"
+                f"{DIV}",
+                reply_markup=kb_subscribe()
+            )
             return
 
         key = str(uid)
@@ -1912,49 +2039,51 @@ def cmd_start(msg):
             allowed_users[key]["uses"] = allowed_users[key].get("uses", 0) + 1
             save_users()
 
-        adm_badge = " ★ ADMIN" if is_admin(uid) else ""
+        adm_badge = "  ★ ADMIN" if is_admin(uid) else ""
         text = (
             f"{BANNER_MAIN}\n\n"
-            f"Привет, {name}!{adm_badge} 🌸\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "🔓 OMEGA — 50+ методов декода\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "📦 v1 — lambda+exec:\n"
-            "  base64/32/16 · zlib/gzip/lzma\n"
-            "  Комбо · Rendy marshal-chain\n\n"
-            "🧠 v2 — Ренди 2.0 Universal:\n"
-            "  XOR строки · state-machine\n"
-            "  call-wrappers · dummy vars\n"
-            "  getattr chains · unicode\n"
-            "  N*(N+1)%2 if-blocks\n\n"
-            "🔧 v3 — String Decoders:\n"
-            "  MBA · ROT13 · chr() concat\n"
-            "  hex/unicode escape\n"
-            "  join obf · reversed strings\n"
-            "  eval(compile) · exec layers\n\n"
-            "🆕 v4 — OMEGA Exclusive:\n"
-            "  Substitution cipher\n"
-            "  Multi-byte XOR · Base58/85\n"
-            "  Format obf · Bitwise tricks\n"
-            "  Ord/char tables · Caesar all\n"
-            "  AST constant folding\n"
-            "  PyArmor/Hyperion cleanup\n"
-            "  Zlib inline decode\n\n"
-            "📦 EXE Unpacker:\n"
-            "  PyInstaller · cx_Freeze\n"
-            "  py2exe · zipapp · .pyc\n"
-            "  Deep scan + 6 методов\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Команды:\n"
-            "/deobf  — 🔓 авто декод\n"
-            "/deobf2 — 🧠 Ренди 2.0\n"
-            "/deobf3 — 📦 EXE распаковка\n"
-            "/deobf4 — 🆕 v4 OMEGA техники\n"
-            "/deep   — 🧬 глубокий анализ\n"
-            "/stats  — 📊 статистика\n"
+            f"👋 Привет, {name}!{adm_badge}\n\n"
+            f"{DIV}\n"
+            f"💀 sicksilent deobf — 50+ техник\n"
+            f"{DIV}\n\n"
+            f"📦 v1 — lambda+exec обфускация:\n"
+            f"  base64 · base32 · base16\n"
+            f"  zlib · gzip · lzma\n"
+            f"  Комбо · Rendy marshal-chain\n\n"
+            f"🧠 v2 — Ренди 2.0 Universal:\n"
+            f"  XOR строки · state-machine\n"
+            f"  call-wrappers · dummy vars\n"
+            f"  getattr chains · unicode rename\n"
+            f"  N*(N+1)%2 if-blocks\n\n"
+            f"🔧 v3 — Строковые методы:\n"
+            f"  MBA · ROT13 · chr() concat\n"
+            f"  hex/unicode escape · join obf\n"
+            f"  reversed · eval(compile)\n\n"
+            f"🆕 v4 — OMEGA Exclusive:\n"
+            f"  Substitution · Base58/85\n"
+            f"  Format obf · Bitwise tricks\n"
+            f"  Ord/char tables · AST folding\n"
+            f"  PyArmor cleanup · Zlib inline\n\n"
+            f"📦 EXE Unpacker:\n"
+            f"  PyInstaller · cx_Freeze · py2exe\n"
+            f"  zipapp · .pyc · Deep Scan (6 методов)\n\n"
+            f"{DIV}\n"
+            f"⚡ Команды:\n"
+            f"  /deobf   — OMEGA АВТО\n"
+            f"  /deobf2  — Ренди 2.0\n"
+            f"  /deobf3  — EXE/Binary\n"
+            f"  /deobf4  — v4 OMEGA\n"
+            f"  /deep    — Deep Scan EXE\n"
+            f"  /stats   — Статистика\n"
         )
         if is_admin(uid):
-            text += "/admin  — 👑 панель админа\n"
+            text += (
+                f"{DIV}\n"
+                f"👑 Admin:\n"
+                f"  /admin · /add · /remove\n"
+                f"  /ban · /unban · /users\n"
+                f"  /pending · /broadcast\n"
+            )
 
         if os.path.exists(WELCOME_PHOTO):
             try:
@@ -2054,28 +2183,35 @@ def cmd_deep(msg):
 @access_required
 def cmd_stats(msg):
     uid = str(msg.from_user.id)
-    user_info = allowed_users.get(uid, {})
-    uses = user_info.get('uses', 0)
-    joined = user_info.get('added', 'неизвестно')
-    total  = global_stats.get('total_decoded', 0)
+    user_info   = allowed_users.get(uid, {})
+    uses        = user_info.get('uses', 0)
+    joined      = user_info.get('added', 'неизвестно')
+    total       = global_stats.get('total_decoded', 0)
     total_bytes = global_stats.get('bytes_processed', 0)
     top_methods = sorted(global_stats.get('methods', {}).items(), key=lambda x: -x[1])[:5]
+
+    # Прогресс-бар юзера
+    lvl = min(uses // 10, 10)
+    user_bar = pbar(lvl * 10, 15)
+
     text = (
-        "╔══════════════════════════════╗\n"
-        "║  📊 СТАТИСТИКА OMEGA         ║\n"
-        "╚══════════════════════════════╝\n\n"
+        f"{BANNER_STATS}\n\n"
         f"👤 Твои данные:\n"
         f"  Файлов декодировано: {uses}\n"
-        f"  Дата регистрации: {joined}\n\n"
-        f"🌍 Глобальная статистика:\n"
-        f"  Всего декодировано: {total}\n"
-        f"  Байт обработано: {total_bytes:,}\n\n"
+        f"  Уровень: [{user_bar}] lv{lvl}\n"
+        f"  С нами с: {joined}\n\n"
+        f"{DIV}\n"
+        f"🌍 Глобальная:\n"
+        f"  Декодировано:  {total}\n"
+        f"  Байт обработано: {total_bytes:,}\n"
     )
     if top_methods:
-        text += "🏆 Топ методов:\n"
+        text += f"\n{DIV}\n🏆 Топ методов:\n"
         medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣']
         for i, (method, count) in enumerate(top_methods):
-            text += f"  {medals[i]} {method}: {count}\n"
+            short = method[:25] + ('…' if len(method) > 25 else '')
+            text += f"  {medals[i]} {short}: {count}\n"
+    text += f"\n{DIV}\n💀 @ArrhythmiaFucks · sicksilent deobf"
     bot.send_message(msg.chat.id, text, reply_markup=kb_main())
 
 
@@ -2327,20 +2463,24 @@ def _send_result(chat_id, msg_id, result, orig_name, method, lines_in, chars_in,
     red_l = round(100 * (1 - lines_out / max(lines_in, 1)))
     red_c = round(100 * (1 - chars_out / max(chars_in, 1)))
 
-    bar_in  = "█" * min(10, lines_in // 100 + 1) + "░" * max(0, 10 - lines_in // 100 - 1)
-    bar_out = "█" * min(10, lines_out // 100 + 1) + "░" * max(0, 10 - lines_out // 100 - 1)
+    # Прогресс бары для строк
+    scale = max(lines_in, 1)
+    bar_in  = pbar(100, 15)
+    bar_out = pbar(max(0, 100 - red_l), 15)
 
     _edit(chat_id, msg_id,
         f"{BANNER_SUCCESS}\n\n"
-        f"📄 Файл: {orig_name}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🔑 Метод: {method}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📊 Строк:   [{bar_in}] {lines_in:,}\n"
-        f"        → [{bar_out}] {lines_out:,}  ({red_l}%↓)\n"
-        f"💬 Символов: {chars_in:,} → {chars_out:,}  ({red_c}%↓)\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💕 Decoded by @ArrhythmiaFucksn")
+        f"📄 {orig_name}\n"
+        f"{DIV}\n"
+        f"🔑 {method}\n"
+        f"{DIV}\n"
+        f"📊 Строк:\n"
+        f"  ДО  [{bar_in}] {lines_in:,}\n"
+        f"  ПО  [{bar_out}] {lines_out:,}  ({red_l}%↓)\n\n"
+        f"💬 Символов:\n"
+        f"  {chars_in:,} → {chars_out:,}  ({red_c}%↓)\n"
+        f"{DIV}\n"
+        f"💀 @ArrhythmiaFucks · sicksilent deobf")
 
     out_name = f"{prefix}{orig_name}"
     out_path = f"/tmp/{out_name}"
@@ -2348,13 +2488,148 @@ def _send_result(chat_id, msg_id, result, orig_name, method, lines_in, chars_in,
     with open(out_path, "rb") as f:
         bot.send_document(chat_id, f, visible_file_name=out_name,
             caption=(
-                f"🔓 OMEGA v{BOT_VERSION} | {method}\n"
-                f"📊 {lines_in}→{lines_out} строк ({red_l}%↓) | "
-                f"{chars_in:,}→{chars_out:,} символов ({red_c}%↓)\n"
-                f"💕 @ArrhythmiaFucksn"
+                f"💀 sicksilent deobf v{BOT_VERSION}\n"
+                f"🔑 {method}\n"
+                f"📊 {lines_in}→{lines_out} стр ({red_l}%↓) | "
+                f"{chars_in:,}→{chars_out:,} симв ({red_c}%↓)\n"
+                f"⚡ @ArrhythmiaFucks"
             ))
     try: os.remove(out_path)
     except: pass
+
+
+# ══════════════════════════════════════════════════════════════
+#   CALLBACK — ПРОВЕРКА ПОДПИСКИ НА КАНАЛ
+# ══════════════════════════════════════════════════════════════
+@bot.callback_query_handler(func=lambda c: c.data == "check_sub")
+def on_check_sub(call):
+    uid   = call.from_user.id
+    name  = call.from_user.first_name or "анон"
+    uname = getattr(call.from_user, "username", "") or ""
+
+    # Если уже в whitelist — просто пускаем
+    if is_allowed(uid):
+        bot.answer_callback_query(call.id, "✅ Доступ уже открыт!")
+        try:
+            bot.edit_message_text(
+                f"✅ Доступ открыт! Привет, {name}!\n\nИспользуй /start",
+                call.message.chat.id, call.message.message_id)
+        except: pass
+        return
+
+    # Если канал публичный — пробуем проверить через API
+    if CHANNEL_ID:
+        try:
+            member = bot.get_chat_member(CHANNEL_ID, uid)
+            if member.status in ("member", "administrator", "creator"):
+                # Автоматически выдаём доступ
+                allowed_users[str(uid)] = {
+                    "username": uname, "first_name": name,
+                    "added": ts(), "uses": 0, "source": "channel_auto"
+                }
+                save_users()
+                pending_subscribe.pop(uid, None)
+                bot.answer_callback_query(call.id, "✅ Подписка подтверждена!")
+                try:
+                    bot.edit_message_text(
+                        f"✅ Доступ открыт автоматически!\n\n"
+                        f"Используй /start, {name}! 💀",
+                        call.message.chat.id, call.message.message_id)
+                except: pass
+                return
+            else:
+                bot.answer_callback_query(call.id, "❌ Ты не подписан на канал!", show_alert=True)
+                return
+        except: pass
+
+    # Приватный канал — отправляем заявку админу
+    pending_subscribe[uid] = {"name": name, "username": uname, "ts": ts()}
+    bot.answer_callback_query(call.id, "📨 Заявка отправлена администратору!")
+
+    uname_str = f"@{uname}" if uname else f"ID: {uid}"
+    admin_text = (
+        f"╔══════════════════════════════╗\n"
+        f"║  📨  НОВАЯ ЗАЯВКА НА ДОСТУП  ║\n"
+        f"╚══════════════════════════════╝\n\n"
+        f"👤 Имя:     {name}\n"
+        f"🔗 Юзер:   {uname_str}\n"
+        f"🆔 ID:      {uid}\n"
+        f"🕐 Время:  {ts()}\n\n"
+        f"Чтобы выдать доступ:\n"
+        f"/add {uid} {name}"
+    )
+    kb_admin_approve = telebot.types.InlineKeyboardMarkup()
+    kb_admin_approve.row(
+        telebot.types.InlineKeyboardButton(f"✅ Выдать доступ", callback_data=f"approve_{uid}_{name[:15]}"),
+        telebot.types.InlineKeyboardButton(f"❌ Отказать",      callback_data=f"deny_{uid}")
+    )
+    for admin_id in ADMIN_IDS:
+        try: bot.send_message(admin_id, admin_text, reply_markup=kb_admin_approve)
+        except: pass
+
+    try:
+        bot.edit_message_text(
+            f"╔══════════════════════════════╗\n"
+            f"║  📨  ЗАЯВКА ОТПРАВЛЕНА  📨   ║\n"
+            f"╚══════════════════════════════╝\n\n"
+            f"Твоя заявка отправлена {ADMIN_USERNAME}\n\n"
+            f"⏳ Ожидай подтверждения...\n\n"
+            f"{DIV}\n"
+            f"💀 sicksilent deobf",
+            call.message.chat.id, call.message.message_id)
+    except: pass
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("approve_") or c.data.startswith("deny_"))
+def on_admin_approve(call):
+    if not is_admin(call.from_user.id):
+        bot.answer_callback_query(call.id, "Нет прав!"); return
+
+    parts = call.data.split("_", 2)
+    action = parts[0]
+
+    if action == "approve":
+        target_id  = int(parts[1])
+        target_name = parts[2] if len(parts) > 2 else f"user_{target_id}"
+        uname_save  = ""
+        if target_id in pending_subscribe:
+            info = pending_subscribe[target_id]
+            target_name = info.get("name", target_name)
+            uname_save  = info.get("username", "")
+
+        allowed_users[str(target_id)] = {
+            "username": uname_save, "first_name": target_name,
+            "added": ts(), "uses": 0, "source": "admin_approve"
+        }
+        save_users()
+        pending_subscribe.pop(target_id, None)
+        bot.answer_callback_query(call.id, f"✅ Доступ выдан {target_name}!")
+        try:
+            bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
+            bot.send_message(call.message.chat.id, f"✅ Выдан доступ: {target_id} ({target_name})")
+        except: pass
+        try:
+            bot.send_message(target_id,
+                f"╔══════════════════════════════╗\n"
+                f"║  ✅  ДОСТУП ОТКРЫТ!  ✅      ║\n"
+                f"╚══════════════════════════════╝\n\n"
+                f"💀 Добро пожаловать в sicksilent deobf!\n\n"
+                f"Используй /start 🔓")
+        except: pass
+
+    elif action == "deny":
+        target_id = int(parts[1])
+        pending_subscribe.pop(target_id, None)
+        bot.answer_callback_query(call.id, "❌ Заявка отклонена")
+        try:
+            bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
+            bot.send_message(call.message.chat.id, f"❌ Отказано: {target_id}")
+        except: pass
+        try:
+            bot.send_message(target_id,
+                f"❌ Твоя заявка отклонена.\n"
+                f"По вопросам: {ADMIN_USERNAME}")
+        except: pass
 
 
 # ══════════════════════════════════════════════════════════════
@@ -2439,22 +2714,55 @@ def handle_menu_button(msg):
 @bot.message_handler(commands=["admin"])
 def cmd_admin(msg):
     if not is_admin(msg.from_user.id): return
-    total = len(allowed_users); banned = len(banned_users)
+    total         = len(allowed_users)
+    banned_count  = len(banned_users)
+    pend_count    = len(pending_subscribe)
     total_decoded = global_stats.get('total_decoded', 0)
     bot.send_message(msg.chat.id,
-        "╔══════════════════════════════╗\n"
-        "║  👑 ADMIN PANEL OMEGA        ║\n"
-        "╚══════════════════════════════╝\n\n"
-        f"👥 Пользователей: {total}\n"
-        f"🚫 Заблокировано: {banned}\n"
-        f"🔓 Декодировано: {total_decoded}\n\n"
-        "Команды:\n"
-        "/add ID — выдать доступ\n"
-        "/remove ID — забрать доступ\n"
-        "/ban ID — заблокировать\n"
-        "/unban ID — разблокировать\n"
-        "/users — список пользователей\n"
-        "/broadcast — рассылка всем")
+        f"{BANNER_ADMIN}\n\n"
+        f"👥 Пользователей:  {total}\n"
+        f"🚫 Заблокировано:  {banned_count}\n"
+        f"📨 Заявок:         {pend_count}\n"
+        f"🔓 Декодировано:   {total_decoded}\n\n"
+        f"{DIV}\n"
+        f"⚡ Команды:\n"
+        f"  /add ID [имя]  — выдать доступ\n"
+        f"  /remove ID     — забрать доступ\n"
+        f"  /ban ID        — заблокировать\n"
+        f"  /unban ID      — разблокировать\n"
+        f"  /users         — список юзеров\n"
+        f"  /pending       — заявки на доступ\n"
+        f"  /broadcast     — рассылка всем")
+
+
+@bot.message_handler(commands=["pending"])
+def cmd_pending(msg):
+    if not is_admin(msg.from_user.id): return
+    if not pending_subscribe:
+        bot.send_message(msg.chat.id,
+            f"{BANNER_ADMIN}\n\n"
+            "📭 Заявок нет.\n\n"
+            "Все пользователи подтверждены 💀")
+        return
+    text = (
+        f"╔══════════════════════════════╗\n"
+        f"║  📨  ЗАЯВКИ НА ДОСТУП  📨   ║\n"
+        f"╚══════════════════════════════╝\n\n"
+        f"Всего: {len(pending_subscribe)}\n\n"
+    )
+    kb = telebot.types.InlineKeyboardMarkup()
+    for uid, info in list(pending_subscribe.items())[:10]:
+        uname = info.get("username", "")
+        name  = info.get("name", f"user_{uid}")
+        t     = info.get("ts", "")
+        uname_str = f"@{uname}" if uname else str(uid)
+        text += f"👤 {name} | {uname_str} | {t}\n"
+        safe_name = name[:15]
+        kb.row(
+            telebot.types.InlineKeyboardButton(f"✅ {name[:12]}", callback_data=f"approve_{uid}_{safe_name}"),
+            telebot.types.InlineKeyboardButton(f"❌ Отказать",    callback_data=f"deny_{uid}")
+        )
+    bot.send_message(msg.chat.id, text, reply_markup=kb)
 
 @bot.message_handler(commands=["add"])
 def cmd_add(msg):
@@ -2505,47 +2813,72 @@ def cmd_unban(msg):
 @bot.message_handler(commands=["users"])
 def cmd_users(msg):
     if not is_admin(msg.from_user.id): return
-    if not allowed_users: bot.send_message(msg.chat.id, "Список пуст"); return
-    lines = ["╔══════════════════════════════╗\n║  👥 ПОЛЬЗОВАТЕЛИ OMEGA       ║\n╚══════════════════════════════╝\n\n"]
+    if not allowed_users:
+        bot.send_message(msg.chat.id, f"{BANNER_ADMIN}\n\nСписок пуст."); return
+    header = (
+        f"╔══════════════════════════════╗\n"
+        f"║  👥  ЮЗЕРЫ  SICKSILENT  👥  ║\n"
+        f"╚══════════════════════════════╝\n\n"
+        f"Всего: {len(allowed_users)}\n{DIV}\n"
+    )
+    lines = [header]
     for uid, info in list(allowed_users.items())[:50]:
         banned_mark = "🚫" if uid in banned_users else "✅"
-        name = info.get('first_name', '') or uid
-        uses = info.get('uses', 0)
-        lines.append(f"{banned_mark} {uid} — {name} [{uses} файлов]\n")
+        name  = info.get('first_name', '') or uid
+        uname = info.get('username', '')
+        uses  = info.get('uses', 0)
+        src   = info.get('source', '')
+        src_badge = " [chan]" if "channel" in src else " [admin]" if "admin" in src else ""
+        uname_str = f" @{uname}" if uname else ""
+        lines.append(f"{banned_mark} {uid}{uname_str} — {name}{src_badge} [{uses} файлов]\n")
     bot.send_message(msg.chat.id, "".join(lines))
 
 @bot.message_handler(commands=["broadcast"])
 def cmd_broadcast(msg):
     if not is_admin(msg.from_user.id): return
     parts = msg.text.split(maxsplit=1)
-    if len(parts) < 2: bot.send_message(msg.chat.id, "Использование: /broadcast текст"); return
-    text = f"📢 OMEGA DEOBF\n\n{parts[1]}"
+    if len(parts) < 2:
+        bot.send_message(msg.chat.id, "Использование: /broadcast текст"); return
+    text = (
+        f"╔══════════════════════════════╗\n"
+        f"║  📢  SICKSILENT  DEOBF  📢  ║\n"
+        f"╚══════════════════════════════╝\n\n"
+        f"{parts[1]}\n\n"
+        f"💀 @ArrhythmiaFucks"
+    )
     sent = 0; failed = 0
     for uid in allowed_users:
-        try: bot.send_message(int(uid), text); sent += 1
+        try: bot.send_message(int(uid), text); sent += 1; time.sleep(0.05)
         except: failed += 1
-    bot.send_message(msg.chat.id, f"✅ Отправлено: {sent}\n❌ Ошибок: {failed}")
+    bot.send_message(msg.chat.id,
+        f"✅ Рассылка завершена\n"
+        f"  Отправлено: {sent}\n"
+        f"  Ошибок: {failed}")
 
 
 # ══════════════════════════════════════════════════════════════
 #   ЗАПУСК
 # ══════════════════════════════════════════════════════════════
 if __name__ == "__main__":
-    print("╔═══════════════════════════════════════════════════════╗")
-    print("║                                                       ║")
-    print("║  🔓 DEOBF OMEGA v3.0 — Astolfo Edition 🌸            ║")
-    print("║                                                       ║")
-    print("║  Techniques:                                          ║")
-    print("║    v1: base64/32/16 + zlib/gzip/lzma + marshal       ║")
-    print("║    v2: Ренди 2.0 — 30+ universal                     ║")
-    print("║    v3: MBA/chr/hex/ROT13/unicode/eval/exec            ║")
-    print("║    v4: OMEGA — 15 exclusive new methods               ║")
-    print("║    EXE: 6-method deep scan unpacker                   ║")
-    print("║                                                       ║")
-    print(f"║  Admins:   {list(ADMIN_IDS)}                         ║")
-    print(f"║  Users:    {len(allowed_users)}                                      ║")
-    print(f"║  Stats:    {global_stats.get('total_decoded', 0)} files decoded               ║")
-    print("║                                                       ║")
-    print("╚═══════════════════════════════════════════════════════╝")
+    print()
+    print("╔══════════════════════════════════════════════════════════╗")
+    print("║                                                          ║")
+    print("║   ░██████╗ ██╗ ██████╗██╗  ██╗███████╗██╗██╗     ███████╗███╗  ██╗████████╗  ║")
+    print("║                                                          ║")
+    print("║   💀  S I C K S I L E N T   D E O B F  💀              ║")
+    print("║   ⚡  v3.0 OMEGA  —  50+ техник декодирования  ⚡       ║")
+    print("║                                                          ║")
+    print("║   v1  base64/32/16 + zlib/gzip/lzma + marshal           ║")
+    print("║   v2  Ренди 2.0 — 30+ universal techniques              ║")
+    print("║   v3  MBA/chr/hex/ROT13/unicode/eval/exec               ║")
+    print("║   v4  OMEGA — 15 exclusive new methods                  ║")
+    print("║   EXE 6-method deep scan unpacker                       ║")
+    print("║                                                          ║")
+    print(f"║   Admin:    {ADMIN_USERNAME:<44} ║")
+    print(f"║   Channel:  {CHANNEL_LINK[:44]:<44} ║")
+    print(f"║   Users:    {len(allowed_users):<44} ║")
+    print(f"║   Decoded:  {global_stats.get('total_decoded', 0):<44} ║")
+    print("║                                                          ║")
+    print("╚══════════════════════════════════════════════════════════╝")
     print()
     bot.infinity_polling(timeout=30, long_polling_timeout=20)
