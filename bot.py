@@ -1,2539 +1,2955 @@
 """
-  🌸 TOGAFF VPN · Astolfo Ultimate Edition 🌸
-  pip install pyTelegramBotAPI requests[socks] PySocks pystyle
-  python3 togaff_vpn_bot.py
+╔══════════════════════════════════════════════════════════════════════╗
+║        🔓 TOGAFF DEOBFUSCATOR BOT v4.0  —  ALL-IN-ONE 🌸           ║
+║        by @ArrhythmiaFucksn                                         ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  ЗАПУСК:                                                            ║
+║    pip install pyTelegramBotAPI uncompyle6                          ║
+║    python3 togaff_deobf.py                                          ║
+╚══════════════════════════════════════════════════════════════════════╝
 """
 
-import telebot, requests, socket, threading, time, random, re, json, os
-import zlib, base64, gzip, lzma, marshal, types, dis, io, struct
-from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import re, base64, zlib, gzip, lzma, bz2, marshal, types, dis, io
+import struct, os, sys, codecs, ast, binascii, hashlib, hmac
+import threading, subprocess, tempfile, shutil, zipfile, tarfile
+import itertools, string, random
+from typing import Optional, Tuple, List, Dict, Any
 
-# ═══════════════════════════════════════
-#            КОНФИГУРАЦИЯ
-# ═══════════════════════════════════════
-TOKEN        = "8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30"
-MINI_APP_URL = "https://t.me/togaff_vpn_bot/app"
-ADMIN_IDS    = {7321093872}
+# ════════════════════════════════════════════════════════
+#   УТИЛИТЫ
+# ════════════════════════════════════════════════════════
 
-USERS_FILE   = "allowed_users.json"
-BANNED_FILE  = "banned_users.json"
+DEOBF_TAG  = "# 🔓 DECODED BY @ArrhythmiaFucksn | TOGAFF DEOBFUSCATOR v4.0\n\n"
+VERSION    = "4.0"
 
-WELCOME_PHOTO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "astolfo.png")
+def _b64_pad(s: str) -> str:
+    pad = len(s) % 4
+    return s + "=" * (4 - pad) if pad else s
 
-TOP_FAST_COUNT = 30
-VERIFY_WORKERS = 40
-SCAN_SAMPLE    = 200
-VERIFY_LIMIT   = 300
-CACHE_TTL      = 1800
-TOP_TTL        = 900
+def _safe_decode(data: bytes, hints: list = None) -> str:
+    encs = hints or ["utf-8", "utf-16-le", "utf-16-be", "latin-1", "cp1251", "cp1252", "ascii"]
+    for enc in encs:
+        try:
+            return data.decode(enc)
+        except: pass
+    return data.decode("utf-8", errors="replace")
 
+def _clean(code: str) -> str:
+    code = re.sub(r'\n{4,}', '\n\n\n', code)
+    code = re.sub(r'[ \t]+\n', '\n', code)
+    return code.strip()
+
+def _strip_comments(code: str) -> str:
+    result = []
+    for line in code.split("\n"):
+        in_s = in_d = False
+        out = []; i = 0
+        while i < len(line):
+            c = line[i]
+            if c == "\\" and i + 1 < len(line):
+                out.append(c); out.append(line[i+1]); i += 2; continue
+            if c == "'" and not in_d: in_s = not in_s
+            elif c == '"' and not in_s: in_d = not in_d
+            elif c == "#" and not in_s and not in_d: break
+            out.append(c); i += 1
+        result.append("".join(out).rstrip())
+    return "\n".join(result)
+
+def _is_python(text: str, min_len: int = 30) -> bool:
+    if len(text) < min_len: return False
+    kws = ["def ", "class ", "import ", "print(", "return ", "if ", "for ", "while ",
+           "__name__", "self.", "lambda ", "= ", "():", "():"]
+    return sum(1 for k in kws if k in text) >= 2
+
+def _try_marshal_to_source(code_obj) -> Optional[str]:
+    for lib in ("uncompyle6", "decompile3"):
+        try:
+            m = __import__(lib)
+            buf = io.StringIO()
+            if hasattr(m, 'decompile_code'):
+                m.decompile_code(code_obj, buf)
+            elif hasattr(m, 'decompile'):
+                m.decompile(sys.version_info[:2], code_obj, buf)
+            r = buf.getvalue()
+            if r and len(r) > 5: return r
+        except: pass
+    try:
+        buf = io.StringIO()
+        dis.dis(code_obj, file=buf)
+        return f"# [bytecode disassembly — install uncompyle6 for source]\n{buf.getvalue()}"
+    except: pass
+    return None
+
+def _marshal_loads_safe(data: bytes) -> Optional[Any]:
+    for offset in (0, 4, 8, 12, 16, 20):
+        try:
+            obj = marshal.loads(data[offset:])
+            return obj
+        except: pass
+    return None
+
+# ════════════════════════════════════════════════════════
+#   V1 — BASE ENCODING + COMPRESSION
+# ════════════════════════════════════════════════════════
+
+_EXEC_PATS = [
+    re.compile(r'exec\s*\(\s*\(?\s*_+\s*\)?\s*\(\s*b[\'\"]([\s\S]+?)[\'\"]\s*\)\s*\)', re.DOTALL),
+    re.compile(r'exec\s*\(\s*\(?\s*_+\s*\)?\s*\(\s*[\'\"]([\s\S]+?)[\'\"]\s*\)\s*\)',  re.DOTALL),
+    re.compile(r'exec\s*\(\s*_+\s*\(\s*b?[\'\"]([\s\S]+?)[\'\"]\s*\)\s*\)',             re.DOTALL),
+]
+
+_V1_LAMBDA_MAP = {
+    "base64":     r"_\s*=\s*lambda\s+__\s*:\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)",
+    "base32":     r"_\s*=\s*lambda\s+__\s*:\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)",
+    "base16":     r"_\s*=\s*lambda\s+__\s*:\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)",
+    "zlib":       r"_\s*=\s*lambda\s+__\s*:\s*__import__\('zlib'\)\.decompress\(__\[::-1\]\)",
+    "gzip":       r"_\s*=\s*lambda\s+__\s*:\s*__import__\('gzip'\)\.decompress\(__\[::-1\]\)",
+    "lzma":       r"_\s*=\s*lambda\s+__\s*:\s*__import__\('lzma'\)\.decompress\(__\[::-1\]\)",
+    "bz2":        r"_\s*=\s*lambda\s+__\s*:\s*__import__\('bz2'\)\.decompress\(__\[::-1\]\)",
+    "base64+zlib":r"_\s*=\s*lambda\s+__\s*:.*?zlib.*?b64decode",
+    "base64+gzip":r"_\s*=\s*lambda\s+__\s*:.*?gzip.*?b64decode",
+    "base64+lzma":r"_\s*=\s*lambda\s+__\s*:.*?lzma.*?b64decode",
+    "base64+bz2": r"_\s*=\s*lambda\s+__\s*:.*?bz2.*?b64decode",
+    "base32+zlib":r"_\s*=\s*lambda\s+__\s*:.*?zlib.*?b32decode",
+    "base32+gzip":r"_\s*=\s*lambda\s+__\s*:.*?gzip.*?b32decode",
+    "base32+lzma":r"_\s*=\s*lambda\s+__\s*:.*?lzma.*?b32decode",
+    "base16+zlib":r"_\s*=\s*lambda\s+__\s*:.*?zlib.*?b16decode",
+    "base16+gzip":r"_\s*=\s*lambda\s+__\s*:.*?gzip.*?b16decode",
+    "base16+lzma":r"_\s*=\s*lambda\s+__\s*:.*?lzma.*?b16decode",
+    "rendy":      r"_\s*=\s*lambda\s+__\s*:.*?marshal.*?gzip.*?lzma.*?zlib.*?base64",
+}
+
+def _v1_detect(code: str) -> Optional[str]:
+    for name, pat in _V1_LAMBDA_MAP.items():
+        if re.search(pat, code, re.DOTALL): return name
+    for pat in _EXEC_PATS:
+        if pat.search(code):
+            if "marshal" in code and "gzip" in code: return "rendy"
+            if "b64decode" in code:
+                for c, n in [("zlib","base64+zlib"),("gzip","base64+gzip"),("lzma","base64+lzma"),("bz2","base64+bz2")]:
+                    if c in code: return n
+                return "base64"
+            if "b32decode" in code:
+                for c, n in [("zlib","base32+zlib"),("gzip","base32+gzip"),("lzma","base32+lzma")]:
+                    if c in code: return n
+                return "base32"
+            if "b16decode" in code:
+                for c, n in [("zlib","base16+zlib"),("gzip","base16+gzip"),("lzma","base16+lzma")]:
+                    if c in code: return n
+                return "base16"
+            for c, n in [("zlib","zlib"),("gzip","gzip"),("lzma","lzma"),("bz2","bz2")]:
+                if c in code: return n
+    return None
+
+def _v1_exec_sub(code: str, fn) -> str:
+    changed = True; passes = 0
+    while changed and passes < 25:
+        changed = False; passes += 1
+        for pat in _EXEC_PATS:
+            def rep(m):
+                try: return fn(m.group(1))
+                except Exception as e: return f"# [decode_err: {e}]\n"
+            new = pat.sub(rep, code)
+            if new != code: code = new; changed = True
+    return code
+
+def _v1_deobf(code: str, method: str) -> str:
+    decode_map = {
+        "base64":     lambda s: _safe_decode(base64.b64decode(_b64_pad(s[::-1]))),
+        "base32":     lambda s: _safe_decode(base64.b32decode(_b64_pad(s[::-1]).upper())),
+        "base16":     lambda s: _safe_decode(base64.b16decode(s[::-1].upper())),
+        "zlib":       lambda s: _safe_decode(zlib.decompress(s[::-1].encode("latin-1"))),
+        "gzip":       lambda s: _safe_decode(gzip.decompress(s[::-1].encode("latin-1"))),
+        "lzma":       lambda s: _safe_decode(lzma.decompress(s[::-1].encode("latin-1"))),
+        "bz2":        lambda s: _safe_decode(bz2.decompress(s[::-1].encode("latin-1"))),
+        "base64+zlib":lambda s: _safe_decode(zlib.decompress(base64.b64decode(_b64_pad(s[::-1])))),
+        "base64+gzip":lambda s: _safe_decode(gzip.decompress(base64.b64decode(_b64_pad(s[::-1])))),
+        "base64+lzma":lambda s: _safe_decode(lzma.decompress(base64.b64decode(_b64_pad(s[::-1])))),
+        "base64+bz2": lambda s: _safe_decode(bz2.decompress(base64.b64decode(_b64_pad(s[::-1])))),
+        "base32+zlib":lambda s: _safe_decode(zlib.decompress(base64.b32decode(_b64_pad(s[::-1]).upper()))),
+        "base32+gzip":lambda s: _safe_decode(gzip.decompress(base64.b32decode(_b64_pad(s[::-1]).upper()))),
+        "base32+lzma":lambda s: _safe_decode(lzma.decompress(base64.b32decode(_b64_pad(s[::-1]).upper()))),
+        "base16+zlib":lambda s: _safe_decode(zlib.decompress(base64.b16decode(s[::-1].upper()))),
+        "base16+gzip":lambda s: _safe_decode(gzip.decompress(base64.b16decode(s[::-1].upper()))),
+        "base16+lzma":lambda s: _safe_decode(lzma.decompress(base64.b16decode(s[::-1].upper()))),
+        "rendy":      None,
+    }
+    if method == "rendy": return _v1_rendy(code)
+    fn = decode_map.get(method)
+    if not fn: return code
+    result = _v1_exec_sub(code, fn)
+    # Удаляем lambda-определение
+    result = re.sub(r"_\s*=\s*lambda\s+__\s*:.*?(?:;|\n)", "", result, flags=re.DOTALL)
+    result = _strip_comments(result)
+    return _clean(result)
+
+def _v1_rendy(code: str) -> str:
+    patterns = [
+        r"exec\s*\(\s*_\s*\(\s*b['\"]([A-Za-z0-9+/=\r\n]+)['\"]\s*\)\s*\)",
+        r"exec\s*\(\s*_+\s*\(\s*['\"]([A-Za-z0-9+/=\r\n]+)['\"]\s*\)\s*\)",
+        r"b['\"]([A-Za-z0-9+/=\n]{80,})['\"]",
+    ]
+    for pat in patterns:
+        for m in re.finditer(pat, code, re.DOTALL):
+            enc = re.sub(r'[\r\n\s]', '', m.group(1))
+            # Пробуем все варианты rendy
+            combos = [
+                lambda d: marshal.loads(gzip.decompress(lzma.decompress(zlib.decompress(base64.b64decode(_b64_pad(d[::-1])))))),
+                lambda d: marshal.loads(zlib.decompress(lzma.decompress(gzip.decompress(base64.b64decode(_b64_pad(d[::-1])))))),
+                lambda d: marshal.loads(lzma.decompress(gzip.decompress(zlib.decompress(base64.b64decode(_b64_pad(d[::-1])))))),
+                lambda d: marshal.loads(zlib.decompress(base64.b64decode(_b64_pad(d[::-1])))),
+                lambda d: marshal.loads(gzip.decompress(base64.b64decode(_b64_pad(d[::-1])))),
+                lambda d: marshal.loads(lzma.decompress(base64.b64decode(_b64_pad(d[::-1])))),
+            ]
+            for combo in combos:
+                try:
+                    obj = combo(enc)
+                    if isinstance(obj, bytes): return DEOBF_TAG + _safe_decode(obj)
+                    if isinstance(obj, types.CodeType):
+                        src = _try_marshal_to_source(obj)
+                        if src: return DEOBF_TAG + src
+                    return DEOBF_TAG + str(obj)
+                except: pass
+    return code
+
+def deobfuscate_v1(code: str) -> Tuple[Optional[str], str]:
+    method = _v1_detect(code)
+    if not method: return None, "v1: паттерн не обнаружен"
+    try:
+        result = _v1_deobf(code, method)
+        if result and result.strip() != code.strip() and len(result) > 10:
+            return DEOBF_TAG + result, method
+        return None, f"v1: не удалось декодировать ({method})"
+    except Exception as e:
+        return None, f"v1 error: {e}"
+
+# ════════════════════════════════════════════════════════
+#   V2 — РЕНДИ 2.0 UNIVERSAL
+# ════════════════════════════════════════════════════════
+
+def _r2_decompress_chain(data: bytes, depth=0, max_depth=16) -> bytes:
+    if depth >= max_depth: return data
+    for fn in [
+        lambda d: base64.b64decode(d + b"=="),
+        lambda d: base64.b64decode(d[::-1] + b"=="),
+        zlib.decompress,
+        gzip.decompress,
+        lzma.decompress,
+        bz2.decompress,
+    ]:
+        try:
+            r = fn(data)
+            if r and r != data and len(r) > 5:
+                deeper = _r2_decompress_chain(r, depth+1, max_depth)
+                return deeper if deeper != r else r
+        except: pass
+    # Marshal
+    obj = _marshal_loads_safe(data)
+    if obj:
+        if isinstance(obj, bytes): return _r2_decompress_chain(obj, depth+1, max_depth)
+        if isinstance(obj, types.CodeType):
+            src = _try_marshal_to_source(obj)
+            if src: return src.encode()
+    return data
+
+def _r2_extract_blobs(source: str) -> List[str]:
+    results = []
+    for pat in [
+        r"b['\"]([A-Za-z0-9+/=\r\n]{80,})['\"]",
+        r"['\"]([A-Za-z0-9+/=\r\n]{200,})['\"]",
+    ]:
+        for m in re.finditer(pat, source, re.DOTALL):
+            candidate = re.sub(r'[\r\n\s]', '', m.group(1))
+            for variant in [candidate, candidate[::-1], _b64_pad(candidate), _b64_pad(candidate[::-1])]:
+                try:
+                    result = _r2_decompress_chain(variant.encode())
+                    text = _safe_decode(result)
+                    if _is_python(text, 80): results.append(text)
+                except: pass
+    return results
+
+def _r2_decode_xor(source: str) -> str:
+    # Pattern: bytes([b ^ KEY for b in bytes.fromhex('...')])
+    for pat in [
+        re.compile(r'bytes\(\[b\s*\^\s*\((\d+)\s*\^\s*\d+\)\s+for\s+b\s+in\s+bytes\.fromhex\([\'"]([0-9a-fA-F]+)[\'"]\)\]\)(?:\.decode\([^)]*\))?'),
+        re.compile(r'bytes\(\[b\s*\^\s*(\d+)\s+for\s+b\s+in\s+bytes\.fromhex\([\'"]([0-9a-fA-F]+)[\'"]\)\]\)(?:\.decode\([^)]*\))?'),
+        re.compile(r'bytes\(\[i\s*\^\s*(\d+)\s+for\s+i\s+in\s+bytes\.fromhex\([\'"]([0-9a-fA-F]+)[\'"]\)\]\)(?:\.decode\([^)]*\))?'),
+    ]:
+        def rep(m):
+            try:
+                key = int(m.group(1))
+                return repr(bytes([b ^ key for b in bytes.fromhex(m.group(2))]).decode("utf-8", errors="replace"))
+            except: return m.group(0)
+        source = pat.sub(rep, source)
+    # bytes([x ^ KEY for x in [N, N, N, ...]])
+    arr_pat = re.compile(r'bytes\(\[(?:x|b|i|c)\s*\^\s*(\d+)\s+for\s+(?:x|b|i|c)\s+in\s+\[([0-9,\s]+)\]\]\)')
+    def arr_rep(m):
+        try:
+            key = int(m.group(1))
+            nums = [int(x.strip()) for x in m.group(2).split(",") if x.strip()]
+            return repr(bytes([n ^ key for n in nums]).decode("utf-8", errors="replace"))
+        except: return m.group(0)
+    source = arr_pat.sub(arr_rep, source)
+    # zip xor
+    zip_pat = re.compile(
+        r"bytes\(\[a\s*\^\s*b\s+for\s+a\s*,\s*b\s+in\s+zip\("
+        r"bytes\.fromhex\(['\"]([0-9a-fA-F]+)['\"]\)\s*,.*?"
+        r"bytes\.fromhex\(['\"]([0-9a-fA-F]+)['\"]\).*?\)\]\)"
+    )
+    def zip_rep(m):
+        try:
+            data = bytes.fromhex(m.group(1)); key = bytes.fromhex(m.group(2))
+            return repr(bytes([a ^ key[i % len(key)] for i, a in enumerate(data)]).decode("utf-8", errors="replace"))
+        except: return m.group(0)
+    source = zip_pat.sub(zip_rep, source)
+    return source
+
+def _r2_decode_hex_escapes(source: str) -> str:
+    for pat, decode in [
+        (re.compile(r"b'((?:\\x[0-9a-fA-F]{2}){4,})'"),
+         lambda m: repr(_safe_decode(bytes.fromhex(re.sub(r'\\x', '', m.group(1)))))),
+        (re.compile(r'b"((?:\\x[0-9a-fA-F]{2}){4,})"'),
+         lambda m: repr(_safe_decode(bytes.fromhex(re.sub(r'\\x', '', m.group(1)))))),
+    ]:
+        try: source = pat.sub(decode, source)
+        except: pass
+    return source
+
+def _r2_decode_unicode_escapes(source: str) -> str:
+    pat = re.compile(r"'((?:\\u[0-9a-fA-F]{4}){3,})'")
+    def rep(m):
+        try: return repr(m.group(1).encode().decode("unicode_escape"))
+        except: return m.group(0)
+    return pat.sub(rep, source)
+
+def _r2_decode_b64_arrays(source: str) -> str:
+    pat = re.compile(
+        r'(\w+)\s*=\s*\[([\'"][A-Za-z0-9+/=]+[\'"](?:\s*,\s*[\'"][A-Za-z0-9+/=]+[\'"])+)\s*\]'
+    )
+    for m in pat.finditer(source):
+        var = m.group(1)
+        items = re.findall(r'[\'"]([A-Za-z0-9+/=]+)[\'"]', m.group(2))
+        decoded = []
+        ok = True
+        for item in items:
+            try: decoded.append(base64.b64decode(_b64_pad(item)).decode("utf-8"))
+            except: ok = False; break
+        if ok and decoded:
+            for idx, val in enumerate(decoded):
+                source = re.sub(re.escape(var) + r'\s*\[\s*' + str(idx) + r'\s*\]', repr(val), source)
+    return source
+
+def _r2_decode_exec_eval(source: str) -> str:
+    pats = [
+        (re.compile(r"exec\s*\(\s*(?:base64\.b64decode|__import__\(['\"]base64['\"]\)\.b64decode)\s*\(\s*b?['\"]([A-Za-z0-9+/=]+)['\"]\s*\)(?:\.decode\([^)]*\))?\s*\)"),
+         lambda m: _safe_decode(base64.b64decode(_b64_pad(m.group(1))))),
+        (re.compile(r"exec\s*\(\s*zlib\.decompress\s*\(\s*base64\.b64decode\s*\(\s*b?['\"]([A-Za-z0-9+/=]+)['\"]\s*\)\s*\)(?:\.decode\([^)]*\))?\s*\)"),
+         lambda m: _safe_decode(zlib.decompress(base64.b64decode(_b64_pad(m.group(1)))))),
+        (re.compile(r"exec\s*\(\s*gzip\.decompress\s*\(\s*base64\.b64decode\s*\(\s*b?['\"]([A-Za-z0-9+/=]+)['\"]\s*\)\s*\)(?:\.decode\([^)]*\))?\s*\)"),
+         lambda m: _safe_decode(gzip.decompress(base64.b64decode(_b64_pad(m.group(1)))))),
+    ]
+    for pat, fn in pats:
+        def make_rep(f):
+            def rep(m):
+                try: return f(m)
+                except: return m.group(0)
+            return rep
+        try: source = pat.sub(make_rep(fn), source)
+        except: pass
+    return source
+
+def _r2_simplify_wrappers(source: str) -> str:
+    wrapper_names = list(set(re.findall(
+        r'def\s+(\w+)\s*\(\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)', source
+    )))
+    wrapper_names = [w for w in wrapper_names if len(w) >= 3]
+    if not wrapper_names: return source
+    for wname in wrapper_names:
+        for _ in range(8):
+            new = re.sub(
+                re.escape(wname) + r'\s*\(\s*([^,\n]+?)\s*,\s*\[([^\[\]\n]*?)\]\s*,\s*\{\s*\}\s*\)',
+                lambda m: f'{m.group(1).strip()}({m.group(2).strip()})' if m.group(2).strip() else f'{m.group(1).strip()}()',
+                source
+            )
+            new = re.sub(
+                re.escape(wname) + r'\s*\(\s*([^,\n]+?)\s*,\s*\[([^\[\]\n]*?)\]\s*,\s*\{([^{}\n]+?)\}\s*\)',
+                lambda m: f'{m.group(1).strip()}({m.group(2).strip()}, {re.sub(chr(39)+"(\\w+)"+chr(39)+r":\s*", r"\1=", m.group(3).strip())})',
+                new
+            )
+            if new == source: break
+            source = new
+    return source
+
+def _r2_remove_state_machine(source: str) -> str:
+    lines = source.split('\n'); result = []; i = 0
+    while i < len(lines):
+        line = lines[i]; s = line.strip()
+        indent = len(line) - len(line.lstrip()) if s else 0
+        if re.match(r'^while\s+\w+\s*!=\s*\d+\s*:\s*$', s): i += 1; continue
+        if re.match(r'^(?:if|elif)\s+\w+\s*==\s*\d{4,}\s*:\s*$', s): i += 1; continue
+        if re.match(r'^\w+\s*=\s*\d{5,}\s*$', s): i += 1; continue
+        if re.match(r'^if\s+\([^)]+\)\s*%\s*2\s*==\s*0\s*:\s*$', s):
+            i += 1
+            while i < len(lines):
+                bl = lines[i]; bs = bl.strip()
+                if bs and (len(bl)-len(bl.lstrip())) <= indent: break
+                if bs: result.append(bl[4:] if bl.startswith('    ') else bl)
+                i += 1
+            continue
+        result.append(line); i += 1
+    return '\n'.join(result)
+
+def _r2_remove_dummies(source: str) -> str:
+    lines = source.split('\n'); result = []
+    for line in lines:
+        s = line.strip()
+        m = re.match(r'^(\w+)\s*=\s*(?:\d+|None|True|False|["\'][^"\']{0,20}["\'])\s*$', s)
+        if m:
+            vname = m.group(1)
+            if (vname.startswith('_') and vname.count('_') >= 2) or re.match(r'^[a-z]{1,3}[0-9]+$', vname):
+                if len(re.findall(r'\b' + re.escape(vname) + r'\b', source)) <= 2:
+                    continue
+        result.append(line)
+    return '\n'.join(result)
+
+def _r2_simplify_getattr(source: str) -> str:
+    source = re.sub(r"getattr\((\w+),\s*['\"]([a-zA-Z_]\w*)['\"](?:,\s*None)?\)", r"\1.\2", source)
+    source = re.sub(r"getattr\(__import__\(['\"](\w+)['\"]\),\s*['\"]([a-zA-Z_]\w*)['\"].*?\)", r"__import__('\1').\2", source)
+    return source
+
+def _r2_decode_decimal_array(source: str) -> str:
+    # exec(''.join(chr(x) for x in [72,101,108,108,111]))
+    pat = re.compile(
+        r"exec\s*\(\s*['\"]?\s*['\"]?\s*\.join\s*\(\s*chr\s*\([^)]+\)\s+for\s+\w+\s+in\s+\[([0-9,\s]+)\]\s*\)\s*['\"]?\s*\)"
+    )
+    def rep(m):
+        try:
+            nums = [int(x.strip()) for x in m.group(1).split(",") if x.strip()]
+            return "".join(chr(n) for n in nums)
+        except: return m.group(0)
+    return pat.sub(rep, source)
+
+def _r2_decode_chr_join(source: str) -> str:
+    # ''.join([chr(72), chr(101), ...])
+    pat = re.compile(r"['\"]?\s*['\"]?\s*\.join\s*\(\s*\[?((?:chr\s*\(\s*\d+\s*\)\s*(?:,\s*)?){3,})\]?\s*\)")
+    def rep(m):
+        nums = re.findall(r'chr\s*\(\s*(\d+)\s*\)', m.group(1))
+        try: return repr("".join(chr(int(n)) for n in nums))
+        except: return m.group(0)
+    return pat.sub(rep, source)
+
+def _r2_decode_octal(source: str) -> str:
+    # b'\101\102\103' -> 'ABC'
+    pat = re.compile(r"b'((?:\\[0-7]{1,3}){4,})'")
+    def rep(m):
+        try:
+            raw = bytes([int(x, 8) for x in re.findall(r'\\([0-7]{1,3})', m.group(1))])
+            return repr(_safe_decode(raw))
+        except: return m.group(0)
+    return pat.sub(rep, source)
+
+def _r2_decode_binary_strings(source: str) -> str:
+    # int('01001000', 2)
+    pat = re.compile(r"int\s*\(\s*['\"]([01]{8,})['\"],\s*2\s*\)")
+    def rep(m):
+        try: return str(int(m.group(1), 2))
+        except: return m.group(0)
+    return pat.sub(rep, source)
+
+def deobfuscate_v2(source: str) -> str:
+    original = source
+    # 1. Binary payload extraction
+    blobs = _r2_extract_blobs(source)
+    if blobs:
+        best = max(blobs, key=len)
+        if len(best) > max(len(source) * 0.25, 100):
+            source = best
+    # 2. exec/eval static decode
+    source = _r2_decode_exec_eval(source)
+    # 3. XOR strings
+    source = _r2_decode_xor(source)
+    # 4. Hex escapes
+    source = _r2_decode_hex_escapes(source)
+    # 5. Unicode escapes
+    source = _r2_decode_unicode_escapes(source)
+    # 6. Base64 arrays
+    source = _r2_decode_b64_arrays(source)
+    # 7. Decimal arrays / chr joins
+    source = _r2_decode_decimal_array(source)
+    source = _r2_decode_chr_join(source)
+    # 8. Octal / binary
+    source = _r2_decode_octal(source)
+    source = _r2_decode_binary_strings(source)
+    # 9. Call wrappers
+    source = _r2_simplify_wrappers(source)
+    # 10. State machine
+    source = _r2_remove_state_machine(source)
+    # 11. Dummy vars
+    source = _r2_remove_dummies(source)
+    # 12. getattr
+    source = _r2_simplify_getattr(source)
+    # 13. Cleanup
+    source = _clean(source)
+    if source == original:
+        return DEOBF_TAG + "# [v2: явных трансформаций не обнаружено]\n\n" + source
+    return DEOBF_TAG + source
+
+# ════════════════════════════════════════════════════════
+#   V3 — ПОПУЛЯРНЫЕ МЕТОДЫ
+# ════════════════════════════════════════════════════════
+
+def _v3_rot13(code: str) -> Tuple[Optional[str], str]:
+    patterns = [
+        re.compile(r"exec\s*\(\s*codecs\.decode\s*\(['\"](.+?)['\"]\s*,\s*['\"]rot[_-]?13['\"]\s*\)\s*\)", re.DOTALL),
+        re.compile(r"exec\s*\(\s*['\"](.+?)['\"]\s*\.encode\(\)\s*\.decode\s*\(['\"]rot[_-]?13['\"]\s*\)\s*\)", re.DOTALL),
+        re.compile(r"exec\s*\(\s*codecs\.encode\s*\(['\"](.+?)['\"]\s*,\s*['\"]rot[_-]?13['\"]\s*\)\s*\)", re.DOTALL),
+    ]
+    for pat in patterns:
+        m = pat.search(code)
+        if m:
+            try: return DEOBF_TAG + codecs.decode(m.group(1), 'rot_13'), "rot13"
+            except: pass
+    # Whole-file rot13
+    if "rot_13" in code or "rot-13" in code.lower() or "'rot13'" in code.lower():
+        for m2 in re.finditer(r"['\"]([a-zA-Z0-9+/=\\]{100,})['\"]", code):
+            try:
+                dec = codecs.decode(m2.group(1), 'rot_13')
+                if _is_python(dec): return DEOBF_TAG + dec, "rot13"
+            except: pass
+    return None, ""
+
+def _v3_xor_fixed(code: str) -> Tuple[Optional[str], str]:
+    # exec(bytes([b ^ KEY for b in b'...']))
+    patterns = [
+        (re.compile(r"(?:key|KEY|_k)\s*=\s*(0x[0-9a-fA-F]+|\d+).*?(?:data|_d|payload)\s*=\s*b['\"](.+?)['\"]\s*.*?exec\s*\(\s*bytes\s*\(\s*\[\s*b\s*\^\s*(?:key|KEY|_k)\s+for\s+b\s+in\s+(?:data|_d|payload)", re.DOTALL),
+         lambda m: bytes([b ^ int(m.group(1),0) for b in m.group(2).encode("latin-1").decode("unicode_escape").encode("latin-1")])),
+        (re.compile(r"exec\s*\(\s*bytes\s*\(\s*\[\s*b\s*\^\s*(\d+)\s+for\s+b\s+in\s+b['\"](.+?)['\"]\s*\]\s*\)\s*\)"),
+         lambda m: bytes([b ^ int(m.group(1)) for b in m.group(2).encode("latin-1").decode("unicode_escape").encode("latin-1")])),
+        (re.compile(r"exec\s*\(\s*bytes\s*\(\s*\[\s*b\s*\^\s*(\d+)\s+for\s+b\s+in\s+bytes\.fromhex\s*\(\s*['\"]([0-9a-fA-F]+)['\"]\s*\)\s*\]\s*\)\s*\)"),
+         lambda m: bytes([b ^ int(m.group(1)) for b in bytes.fromhex(m.group(2))])),
+    ]
+    for pat, dec in patterns:
+        m = pat.search(code)
+        if m:
+            try:
+                result = _safe_decode(dec(m))
+                if _is_python(result): return DEOBF_TAG + result, "xor-fixed-key"
+            except: pass
+    return None, ""
+
+def _v3_plain_b64(code: str) -> Tuple[Optional[str], str]:
+    pats = [
+        re.compile(r"exec\s*\(\s*base64\.b64decode\s*\(\s*b?['\"]([A-Za-z0-9+/=]{20,})['\"]", re.DOTALL),
+        re.compile(r"exec\s*\(\s*__import__\(['\"]base64['\"]\)\.b64decode\s*\(\s*b?['\"]([A-Za-z0-9+/=]{20,})['\"]", re.DOTALL),
+    ]
+    for pat in pats:
+        for m in pat.finditer(code):
+            enc = m.group(1).replace("\n","").replace(" ","")
+            try:
+                dec = base64.b64decode(_b64_pad(enc)).decode("utf-8")
+                if len(dec) > 5:
+                    result = dec
+                    for _ in range(15):
+                        found = False
+                        for pat2 in pats:
+                            m2 = pat2.search(result)
+                            if m2:
+                                enc2 = m2.group(1).replace("\n","").replace(" ","")
+                                try: result = base64.b64decode(_b64_pad(enc2)).decode("utf-8"); found = True; break
+                                except: pass
+                        if not found: break
+                    return DEOBF_TAG + result, "plain-base64"
+            except: pass
+    return None, ""
+
+def _v3_multilayer_b64(code: str) -> Tuple[Optional[str], str]:
+    pat = re.compile(
+        r"exec\s*\(\s*(?:base64\.b64decode|__import__\(['\"]base64['\"]\)\.b64decode)\s*\(['\"]?([A-Za-z0-9+/=\n]+)['\"]?\s*\)"
+    )
+    current = code; layers = 0
+    while layers < 30:
+        m = pat.search(current)
+        if not m: break
+        enc = re.sub(r'\s','', m.group(1))
+        try: current = base64.b64decode(_b64_pad(enc)).decode("utf-8"); layers += 1
+        except: break
+    if layers >= 2:
+        return DEOBF_TAG + f"# Снято слоёв base64: {layers}\n\n" + current, f"multilayer-base64 ({layers} layers)"
+    return None, ""
+
+def _v3_hex_exec(code: str) -> Tuple[Optional[str], str]:
+    pat = re.compile(r"exec\s*\(\s*['\"]([\\x0-9a-fA-F\\u0-9a-fA-F]{20,})['\"](?:\.encode\(\))?\s*\)")
+    m = pat.search(code)
+    if m:
+        try:
+            raw = m.group(1).encode("latin-1").decode("unicode_escape")
+            if _is_python(raw): return DEOBF_TAG + raw, "hex-exec"
+        except: pass
+    return None, ""
+
+def _v3_compile_marshal(code: str) -> Tuple[Optional[str], str]:
+    pat = re.compile(
+        r"marshal\.loads\s*\(\s*(?:(?:zlib|gzip|lzma)\.decompress\s*\()?(?:base64\.b64decode\s*\()?['\"]([A-Za-z0-9+/=\n]+)['\"]\)?(?:\))?\s*\)"
+    )
+    for m in pat.finditer(code, re.DOTALL):
+        enc = re.sub(r'\s','', m.group(1))
+        for transform in [
+            lambda x: base64.b64decode(_b64_pad(x)),
+            lambda x: zlib.decompress(base64.b64decode(_b64_pad(x))),
+            lambda x: gzip.decompress(base64.b64decode(_b64_pad(x))),
+            lambda x: lzma.decompress(base64.b64decode(_b64_pad(x))),
+            lambda x: base64.b64decode(_b64_pad(x[::-1])),
+            lambda x: zlib.decompress(base64.b64decode(_b64_pad(x[::-1]))),
+        ]:
+            try:
+                raw = transform(enc)
+                obj = _marshal_loads_safe(raw)
+                if obj and isinstance(obj, types.CodeType):
+                    src = _try_marshal_to_source(obj)
+                    if src: return DEOBF_TAG + src, "compile+marshal"
+            except: pass
+    return None, ""
+
+def _v3_chr_obfuscate(code: str) -> Tuple[Optional[str], str]:
+    chr_count = len(re.findall(r'\bchr\s*\(\s*\d+\s*\)', code))
+    if chr_count < 5: return None, ""
+    result = re.sub(r'chr\s*\(\s*(\d+)\s*\)', lambda m: repr(chr(int(m.group(1)))), code)
+    for _ in range(10):
+        new = re.sub(r"'([^'\\]*)'\s*\+\s*'([^'\\]*)'", lambda m: repr(m.group(1)+m.group(2)), result)
+        if new == result: break
+        result = new
+    if result != code:
+        return DEOBF_TAG + f"# chr() раскрыто: {chr_count} вызовов\n\n" + result, f"chr-obfuscate ({chr_count})"
+    return None, ""
+
+def _v3_pyarmor(code: str) -> Tuple[Optional[str], str]:
+    if "__pyarmor__" not in code and "pyarmor_runtime" not in code: return None, ""
+    result = re.sub(r"from\s+pyarmor_runtime\s+import.*?\n", "", code)
+    result = re.sub(r"import\s+pyarmor_runtime.*?\n", "", result)
+    result = re.sub(r"__pyarmor__\s*\([^)]+\)", "# [PyArmor call removed]", result)
+    note = (
+        "# ⚠️  PYARMOR — полный декод без ключа невозможен\n"
+        "# Wrapper удалён. Зашифрованный payload остался.\n\n"
+    )
+    return DEOBF_TAG + note + result, "pyarmor (partial)"
+
+def _v3_hyperion(code: str) -> Tuple[Optional[str], str]:
+    if not (re.search(r'range\s*\(\s*256\s*\)', code) and
+            re.search(r'def\s+\w+\s*\(\s*\w+\s*,\s*\w+\s*\)', code)):
+        return None, ""
+    # Пробуем выполнить RC4-подобный cipher статически
+    note = (
+        "# ⚠️  HYPERION — RC4-like cipher обнаружен\n"
+        "# Для декода нужен динамический анализ\n\n"
+    )
+    return DEOBF_TAG + note + code, "hyperion (detected)"
+
+def _v3_opy(code: str) -> Tuple[Optional[str], str]:
+    if "__pragma__" not in code and not re.search(r'\bO0O0O0\b|\bO0O0\b|\bl1l1l1\b', code): return None, ""
+    result = re.sub(r"__pragma__\s*\([^)]+\)", "", code)
+    result = _clean(result)
+    if result != code: return DEOBF_TAG + result, "opy"
+    return None, ""
+
+def _v3_reverse_string(code: str) -> Tuple[Optional[str], str]:
+    # exec('...string...'[::-1])
+    pat = re.compile(r"exec\s*\(\s*['\"](.{30,})['\"](?:\s*\.\s*encode\(\))?\s*\[\s*::-1\s*\]\s*(?:\.decode\([^)]*\))?\s*\)")
+    m = pat.search(code)
+    if m:
+        try:
+            dec = m.group(1)[::-1]
+            if _is_python(dec): return DEOBF_TAG + dec, "reverse-string"
+        except: pass
+    return None, ""
+
+def _v3_lambda_chain(code: str) -> Tuple[Optional[str], str]:
+    # (lambda x: (lambda y: exec(y))(base64.b64decode(x)))('...')
+    pat = re.compile(
+        r"\(lambda\s+\w+\s*:.*?exec.*?\)\s*\(\s*['\"]([A-Za-z0-9+/=]{30,})['\"]",
+        re.DOTALL
+    )
+    m = pat.search(code)
+    if m:
+        enc = m.group(1).replace("\n","")
+        for fn in [
+            lambda x: base64.b64decode(_b64_pad(x)).decode(),
+            lambda x: base64.b64decode(_b64_pad(x[::-1])).decode(),
+            lambda x: zlib.decompress(base64.b64decode(_b64_pad(x))).decode(),
+        ]:
+            try:
+                dec = fn(enc)
+                if _is_python(dec): return DEOBF_TAG + dec, "lambda-chain"
+            except: pass
+    return None, ""
+
+def _v3_caesar(code: str) -> Tuple[Optional[str], str]:
+    # exec(bytes([b-N for b in b'...']))
+    for shift in range(1, 256):
+        pat = re.compile(
+            r"exec\s*\(\s*bytes\s*\(\s*\[\s*b\s*-\s*" + str(shift) + r"\s+for\s+b\s+in\s+b['\"](.+?)['\"]\s*\]\s*\)\s*(?:\.decode\([^)]*\))?\s*\)"
+        )
+        m = pat.search(code)
+        if m:
+            try:
+                raw = bytes([(b - shift) % 256 for b in m.group(1).encode("latin-1").decode("unicode_escape").encode("latin-1")])
+                dec = _safe_decode(raw)
+                if _is_python(dec): return DEOBF_TAG + dec, f"caesar (shift={shift})"
+            except: pass
+    return None, ""
+
+def _v3_base85(code: str) -> Tuple[Optional[str], str]:
+    # exec(base64.b85decode('...'))
+    pat = re.compile(r"exec\s*\(\s*(?:base64\.b85decode|__import__\(['\"]base64['\"]\)\.b85decode)\s*\(\s*b?['\"]([A-Za-z0-9!#$%&()*+\-;<=>?@^_`{|}~]{20,})['\"]")
+    m = pat.search(code)
+    if m:
+        try:
+            dec = base64.b85decode(m.group(1)).decode("utf-8")
+            if _is_python(dec): return DEOBF_TAG + dec, "base85"
+        except: pass
+    return None, ""
+
+def _v3_base32_plain(code: str) -> Tuple[Optional[str], str]:
+    pat = re.compile(r"exec\s*\(\s*(?:base64\.b32decode|__import__\(['\"]base64['\"]\)\.b32decode)\s*\(\s*b?['\"]([A-Z2-7=]{20,})['\"]")
+    m = pat.search(code)
+    if m:
+        try:
+            dec = base64.b32decode(_b64_pad(m.group(1))).decode("utf-8")
+            if len(dec) > 5: return DEOBF_TAG + dec, "plain-base32"
+        except: pass
+    return None, ""
+
+def _v3_string_split_join(code: str) -> Tuple[Optional[str], str]:
+    # ''.join(['pa','rt','1','...'])
+    pat = re.compile(r"exec\s*\(\s*['\"]['\"]\.join\s*\(\s*\[([^\]]{20,})\]\s*\)\s*\)")
+    m = pat.search(code)
+    if m:
+        try:
+            parts = re.findall(r"['\"]([^'\"]*)['\"]", m.group(1))
+            joined = "".join(parts)
+            if _is_python(joined): return DEOBF_TAG + joined, "string-split-join"
+        except: pass
+    return None, ""
+
+def _v3_builtins_hide(code: str) -> Tuple[Optional[str], str]:
+    # getattr(__builtins__, 'exec')('...')
+    pat = re.compile(
+        r"getattr\s*\(\s*(?:__builtins__|builtins)\s*,\s*['\"]exec['\"]\s*\)\s*\(\s*['\"](.{30,})['\"]"
+    )
+    m = pat.search(code)
+    if m:
+        raw = m.group(1)
+        if _is_python(raw): return DEOBF_TAG + raw, "builtins-hide"
+    return None, ""
+
+def _v3_decimal_array(code: str) -> Tuple[Optional[str], str]:
+    # exec(''.join(chr(x) for x in [72,101,...]))
+    pat = re.compile(
+        r"exec\s*\(\s*['\"]?\s*['\"]?\s*\.join\s*\(\s*(?:map\s*\(\s*chr\s*,|chr\s*\([^)]+\)\s+for\s+\w+\s+in)\s*\[([0-9,\s]+)\]"
+    )
+    m = pat.search(code)
+    if m:
+        try:
+            nums = [int(x.strip()) for x in m.group(1).split(",") if x.strip()]
+            dec = "".join(chr(n) for n in nums)
+            if _is_python(dec): return DEOBF_TAG + dec, "decimal-array"
+        except: pass
+    # map(chr, [...])
+    pat2 = re.compile(r"exec\s*\(\s*['\"]?\s*['\"]?\s*\.join\s*\(\s*map\s*\(\s*chr\s*,\s*\[([0-9,\s]+)\]\s*\)\s*\)")
+    m2 = pat2.search(code)
+    if m2:
+        try:
+            nums = [int(x.strip()) for x in m2.group(1).split(",") if x.strip()]
+            dec = "".join(chr(n) for n in nums)
+            if _is_python(dec): return DEOBF_TAG + dec, "map-chr"
+        except: pass
+    return None, ""
+
+def _v3_eval_b64(code: str) -> Tuple[Optional[str], str]:
+    # eval(base64.b64decode(...))
+    pat = re.compile(r"eval\s*\(\s*base64\.b64decode\s*\(\s*b?['\"]([A-Za-z0-9+/=]{20,})['\"]")
+    m = pat.search(code)
+    if m:
+        try:
+            dec = base64.b64decode(_b64_pad(m.group(1))).decode("utf-8")
+            if len(dec) > 5: return DEOBF_TAG + dec, "eval-base64"
+        except: pass
+    return None, ""
+
+def _v3_rc4(code: str) -> Tuple[Optional[str], str]:
+    # Ищем RC4-подобный код
+    if not (re.search(r'range\s*\(256\)', code) and re.search(r'swap|S\[|KSA|PRGA', code, re.I)):
+        return None, ""
+    # RC4 implementation in code — детектируем и сообщаем
+    return DEOBF_TAG + "# ⚠️  RC4 шифрование обнаружено\n# Нужен ключ для декодирования\n\n" + code, "rc4 (detected)"
+
+def _v3_fake_import(code: str) -> Tuple[Optional[str], str]:
+    # import-like obf: __import__('os').__class__.__mro__[...]
+    if "__class__.__mro__" not in code and "__subclasses__" not in code: return None, ""
+    # Разворачиваем цепочки
+    result = re.sub(r"__import__\s*\(\s*['\"](\w+)['\"]\s*\)", r"__import__('\1')", code)
+    if result != code:
+        return DEOBF_TAG + "# Цепочки импортов упрощены\n\n" + result, "fake-import-chains"
+    return None, ""
+
+def _v3_swap_bytes(code: str) -> Tuple[Optional[str], str]:
+    # bytes are swapped pairs: b'\x68\x65' -> 'eh'
+    pat = re.compile(
+        r"exec\s*\(\s*bytes\s*\(\s*\[b\[i\+1\]\s+if\s+i\s*%\s*2\s*==\s*0\s+else\s+b\[i-1\]\s+for\s+i.*?\]\s*\)"
+    )
+    m = pat.search(code)
+    if m: return DEOBF_TAG + "# Swap-bytes obfuscation detected\n\n" + code, "swap-bytes (detected)"
+    return None, ""
+
+def _v3_pyc_decompile(pyc_data: bytes) -> Tuple[Optional[str], str]:
+    # Пробуем uncompyle6
+    for lib in ("uncompyle6",):
+        try:
+            mod = __import__(lib)
+            with tempfile.NamedTemporaryFile(suffix=".pyc", delete=False) as f:
+                f.write(pyc_data); fname = f.name
+            buf = io.StringIO()
+            mod.decompile_file(fname, buf)
+            os.unlink(fname)
+            r = buf.getvalue()
+            if r and len(r) > 10: return DEOBF_TAG + r, "pyc-uncompyle6"
+        except: pass
+    # Пробуем marshal + dis
+    for offset in (8, 12, 16):
+        try:
+            obj = marshal.loads(pyc_data[offset:])
+            if isinstance(obj, types.CodeType):
+                src = _try_marshal_to_source(obj)
+                if src: return DEOBF_TAG + src, "pyc-marshal"
+        except: pass
+    return None, "pyc: не удалось декомпилировать (установи uncompyle6)"
+
+def _v3_pyz_extract(pyz_data: bytes) -> Tuple[Optional[str], str]:
+    """Извлекает из .pyz (zip) файла."""
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pyz", delete=False) as f:
+            f.write(pyz_data); fname = f.name
+        with zipfile.ZipFile(fname) as zf:
+            files = zf.namelist()
+            results = []
+            for fn in files:
+                if fn.endswith(('.py', '.pyc', '__main__.py')):
+                    data = zf.read(fn)
+                    if fn.endswith('.pyc'):
+                        src, _ = _v3_pyc_decompile(data)
+                        if src: results.append((fn, src))
+                    else:
+                        results.append((fn, DEOBF_TAG + _safe_decode(data)))
+            os.unlink(fname)
+            if results:
+                combined = "\n\n".join(f"# === {fn} ===\n{src}" for fn, src in results)
+                return DEOBF_TAG + combined, f"pyz-zip ({len(results)} files)"
+    except: pass
+    return None, "pyz: не удалось извлечь"
+
+def _v3_marshal_chain(code: str) -> Tuple[Optional[str], str]:
+    """Многослойный marshal."""
+    pat = re.compile(r"exec\s*\(\s*marshal\.loads\s*\(\s*b['\"](.+?)['\"]", re.DOTALL)
+    m = pat.search(code)
+    if m:
+        try:
+            raw = m.group(1).encode("latin-1").decode("unicode_escape").encode("latin-1")
+            obj = _marshal_loads_safe(raw)
+            if isinstance(obj, types.CodeType):
+                src = _try_marshal_to_source(obj)
+                if src: return DEOBF_TAG + src, "marshal-exec"
+        except: pass
+    return None, ""
+
+def _v3_zstd(code: str) -> Tuple[Optional[str], str]:
+    """zstd компрессия."""
+    pat = re.compile(r"exec\s*\(\s*(?:zstd|zstandard)\.decompress\s*\(\s*b?['\"]([A-Za-z0-9+/=]{20,})['\"]")
+    m = pat.search(code)
+    if m:
+        try:
+            import zstd
+            raw = base64.b64decode(_b64_pad(m.group(1)))
+            dec = _safe_decode(zstd.decompress(raw))
+            if _is_python(dec): return DEOBF_TAG + dec, "zstd"
+        except: pass
+    return None, ""
+
+def _v3_bz2_plain(code: str) -> Tuple[Optional[str], str]:
+    pat = re.compile(r"exec\s*\(\s*bz2\.decompress\s*\(\s*b?['\"]([A-Za-z0-9+/=]{20,})['\"]")
+    m = pat.search(code)
+    if m:
+        try:
+            raw = base64.b64decode(_b64_pad(m.group(1)))
+            dec = _safe_decode(bz2.decompress(raw))
+            if _is_python(dec): return DEOBF_TAG + dec, "bz2"
+        except: pass
+    return None, ""
+
+def _v3_lzma_plain(code: str) -> Tuple[Optional[str], str]:
+    pat = re.compile(r"exec\s*\(\s*lzma\.decompress\s*\(\s*b?['\"]([A-Za-z0-9+/=]{20,})['\"]")
+    m = pat.search(code)
+    if m:
+        try:
+            raw = base64.b64decode(_b64_pad(m.group(1)))
+            dec = _safe_decode(lzma.decompress(raw))
+            if _is_python(dec): return DEOBF_TAG + dec, "lzma-plain"
+        except: pass
+    return None, ""
+
+def _v3_integer_source(code: str) -> Tuple[Optional[str], str]:
+    """exec(int.to_bytes(...).decode())"""
+    pat = re.compile(r"exec\s*\(\s*\((\d{10,})\)\.to_bytes\s*\(\s*(\d+)\s*,\s*['\"](?:big|little)['\"]\s*\)(?:\.decode\([^)]*\))?\s*\)")
+    m = pat.search(code)
+    if m:
+        try:
+            n, length = int(m.group(1)), int(m.group(2))
+            dec = n.to_bytes(length, 'big').decode("utf-8")
+            if _is_python(dec): return DEOBF_TAG + dec, "integer-encoded"
+        except: pass
+    return None, ""
+
+def _v3_unicode_names(code: str) -> Tuple[Optional[str], str]:
+    """\\N{LATIN SMALL LETTER A} unicode names."""
+    if r'\N{' not in code: return None, ""
+    try:
+        import unicodedata
+        result = re.sub(
+            r'\\N\{([^}]+)\}',
+            lambda m: unicodedata.lookup(m.group(1)),
+            code
+        )
+        if result != code: return DEOBF_TAG + result, "unicode-names"
+    except: pass
+    return None, ""
+
+def _v3_vigenere(code: str) -> Tuple[Optional[str], str]:
+    """Попытка vigenere декодирования зашифрованных строк."""
+    # Ищем vigenere-like код
+    if not ("key" in code.lower() and re.search(r'ord\s*\(', code) and re.search(r'chr\s*\(', code)):
+        return None, ""
+    # Детектируем, не декодируем
+    return DEOBF_TAG + "# ⚠️  Vigenere-подобное шифрование обнаружено\n# Нужен ключ\n\n" + code, "vigenere (detected)"
+
+def deobfuscate_v3(code: str) -> Tuple[Optional[str], str]:
+    methods = [
+        _v3_plain_b64, _v3_multilayer_b64, _v3_rot13, _v3_xor_fixed,
+        _v3_hex_exec, _v3_compile_marshal, _v3_chr_obfuscate, _v3_decimal_array,
+        _v3_reverse_string, _v3_lambda_chain, _v3_eval_b64, _v3_caesar,
+        _v3_base85, _v3_base32_plain, _v3_string_split_join, _v3_marshal_chain,
+        _v3_integer_source, _v3_unicode_names, _v3_bz2_plain, _v3_lzma_plain,
+        _v3_fake_import, _v3_rc4, _v3_builtins_hide, _v3_swap_bytes,
+        _v3_pyarmor, _v3_hyperion, _v3_opy, _v3_vigenere, _v3_zstd,
+    ]
+    for fn in methods:
+        try:
+            r, m = fn(code)
+            if r: return r, m
+        except: pass
+    return None, "v3: метод не обнаружен"
+
+# ════════════════════════════════════════════════════════
+#   V4 — ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ
+# ════════════════════════════════════════════════════════
+
+def _v4_base62(code: str) -> Tuple[Optional[str], str]:
+    """Base62 кодирование."""
+    CHARS = string.digits + string.ascii_letters
+    def decode(s: str) -> bytes:
+        n = 0
+        for c in s:
+            n = n * 62 + CHARS.index(c)
+        return n.to_bytes((n.bit_length() + 7) // 8, 'big')
+
+    pat = re.compile(r"exec\s*\(\s*['\"]([0-9a-zA-Z]{20,})['\"]")
+    for m in pat.finditer(code):
+        try:
+            dec = decode(m.group(1)).decode("utf-8")
+            if _is_python(dec): return DEOBF_TAG + dec, "base62"
+        except: pass
+    return None, ""
+
+def _v4_base58(code: str) -> Tuple[Optional[str], str]:
+    """Base58 (Bitcoin style)."""
+    ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+    def decode(s: str) -> bytes:
+        n = 0
+        for c in s:
+            if c not in ALPHABET: return b''
+            n = n * 58 + ALPHABET.index(c)
+        return n.to_bytes((n.bit_length() + 7) // 8, 'big')
+
+    pat = re.compile(r"exec\s*\(\s*['\"]([1-9A-HJ-NP-Za-km-z]{20,})['\"]")
+    for m in pat.finditer(code):
+        try:
+            dec = decode(m.group(1)).decode("utf-8")
+            if _is_python(dec): return DEOBF_TAG + dec, "base58"
+        except: pass
+    return None, ""
+
+def _v4_bitwise_not(code: str) -> Tuple[Optional[str], str]:
+    """bytes([~b & 0xFF for b in b'...'])"""
+    pat = re.compile(
+        r"exec\s*\(\s*bytes\s*\(\s*\[\s*~b\s*&\s*0xFF\s+for\s+b\s+in\s+b['\"](.+?)['\"]\s*\]\s*\)"
+    )
+    m = pat.search(code)
+    if m:
+        try:
+            raw = bytes([~b & 0xFF for b in m.group(1).encode("latin-1").decode("unicode_escape").encode("latin-1")])
+            dec = _safe_decode(raw)
+            if _is_python(dec): return DEOBF_TAG + dec, "bitwise-NOT"
+        except: pass
+    return None, ""
+
+def _v4_rol_ror(code: str) -> Tuple[Optional[str], str]:
+    """ROL/ROR bit rotation."""
+    # exec(bytes([(b >> N | b << (8-N)) & 0xFF for b in b'...']))
+    pat = re.compile(
+        r"exec\s*\(\s*bytes\s*\(\s*\[\s*\(b\s*>>\s*(\d+)\s*\|\s*b\s*<<\s*(\d+)\)\s*&\s*0xFF\s+for\s+b\s+in\s+b['\"](.+?)['\"]\s*\]\s*\)"
+    )
+    m = pat.search(code)
+    if m:
+        try:
+            n = int(m.group(1))
+            raw = m.group(3).encode("latin-1").decode("unicode_escape").encode("latin-1")
+            dec = _safe_decode(bytes([(b >> n | b << (8-n)) & 0xFF for b in raw]))
+            if _is_python(dec): return DEOBF_TAG + dec, f"ROL/ROR (n={n})"
+        except: pass
+    return None, ""
+
+def _v4_multi_xor(code: str) -> Tuple[Optional[str], str]:
+    """Многоключевой XOR: b ^ k1 ^ k2 ^ k3."""
+    pat = re.compile(
+        r"exec\s*\(\s*bytes\s*\(\s*\[b\s*\^\s*(\d+)\s*\^\s*(\d+)(?:\s*\^\s*(\d+))?\s+for\s+b\s+in\s+bytes\.fromhex\(['\"]([0-9a-fA-F]+)['\"]\)\]\)"
+    )
+    m = pat.search(code)
+    if m:
+        try:
+            keys = [int(x) for x in [m.group(1), m.group(2), m.group(3)] if x]
+            key = 0
+            for k in keys: key ^= k
+            raw = bytes([b ^ key for b in bytes.fromhex(m.group(4))])
+            dec = _safe_decode(raw)
+            if _is_python(dec): return DEOBF_TAG + dec, f"multi-xor ({'^'.join(str(k) for k in keys)})"
+        except: pass
+    return None, ""
+
+def _v4_zlib_b64_norev(code: str) -> Tuple[Optional[str], str]:
+    """zlib(b64decode(data)) без реверса."""
+    pat = re.compile(
+        r"exec\s*\(\s*zlib\.decompress\s*\(\s*base64\.b64decode\s*\(\s*b?['\"]([A-Za-z0-9+/=]{20,})['\"]"
+    )
+    m = pat.search(code)
+    if m:
+        try:
+            dec = _safe_decode(zlib.decompress(base64.b64decode(_b64_pad(m.group(1)))))
+            if _is_python(dec): return DEOBF_TAG + dec, "zlib+base64-norev"
+        except: pass
+    return None, ""
+
+def _v4_hex_string_literal(code: str) -> Tuple[Optional[str], str]:
+    """exec(bytes.fromhex('4865...'))"""
+    pat = re.compile(r"exec\s*\(\s*bytes\.fromhex\s*\(\s*['\"]([0-9a-fA-F]{20,})['\"]\s*\)(?:\.decode\([^)]*\))?\s*\)")
+    m = pat.search(code)
+    if m:
+        try:
+            dec = _safe_decode(bytes.fromhex(m.group(1)))
+            if _is_python(dec): return DEOBF_TAG + dec, "hex-fromhex"
+        except: pass
+    return None, ""
+
+def _v4_eval_chain(code: str) -> Tuple[Optional[str], str]:
+    """eval(eval(eval(...('...'))))"""
+    pat = re.compile(r"((?:eval\s*\()+)\s*['\"]([A-Za-z0-9+/=]{20,})['\"]\s*((?:\))+)")
+    m = pat.search(code)
+    if m:
+        depth = m.group(1).count('eval(')
+        enc = m.group(2)
+        result = enc
+        for _ in range(depth):
+            try:
+                dec = base64.b64decode(_b64_pad(result)).decode("utf-8")
+                result = dec
+            except: break
+        if _is_python(result): return DEOBF_TAG + result, f"eval-chain (depth={depth})"
+    return None, ""
+
+def _v4_string_multiply(code: str) -> Tuple[Optional[str], str]:
+    """'a' * 100 + 'b' * 50 обфускация."""
+    pat = re.compile(r"exec\s*\(\s*(.+?)\s*\)", re.DOTALL)
+    m = pat.search(code)
+    if m:
+        expr = m.group(1)
+        if "* " in expr or " *" in expr:
+            try:
+                # Безопасная оценка строкового выражения
+                safe_expr = re.sub(r'[^a-zA-Z0-9\'"*+\[\]\(\)\s]', '', expr)
+                result = eval(safe_expr)
+                if isinstance(result, str) and _is_python(result):
+                    return DEOBF_TAG + result, "string-multiply"
+            except: pass
+    return None, ""
+
+def _v4_compressed_marshal(code: str) -> Tuple[Optional[str], str]:
+    """marshal.loads внутри многослойной компрессии."""
+    # Ищем любой длинный bytes literal и пробуем marshal
+    pat = re.compile(r"b['\"]([\\x0-9a-fA-F]{50,})['\"]")
+    for m in pat.finditer(code):
+        try:
+            raw = m.group(1).encode("latin-1").decode("unicode_escape").encode("latin-1")
+            result = _r2_decompress_chain(raw)
+            text = _safe_decode(result)
+            if _is_python(text, 50): return DEOBF_TAG + text, "compressed-marshal"
+        except: pass
+    return None, ""
+
+def _v4_add_sub_cipher(code: str) -> Tuple[Optional[str], str]:
+    """bytes([b + N for b in b'...']) или [(b - N) % 256 ...]"""
+    for op, name in [(r'\+', 'add'), (r'\-', 'sub')]:
+        pat = re.compile(
+            r"exec\s*\(\s*bytes\s*\(\s*\[\s*(?:b\s*" + op + r"\s*(\d+)|(\d+)\s*" + op + r"\s*b)\s+for\s+b\s+in\s+b['\"](.+?)['\"]\s*\]\s*\)"
+        )
+        m = pat.search(code)
+        if m:
+            n = int(m.group(1) or m.group(2))
+            try:
+                raw = m.group(3).encode("latin-1").decode("unicode_escape").encode("latin-1")
+                if name == 'add':
+                    dec = _safe_decode(bytes([(b + n) % 256 for b in raw]))
+                else:
+                    dec = _safe_decode(bytes([(b - n) % 256 for b in raw]))
+                if _is_python(dec): return DEOBF_TAG + dec, f"add-sub-cipher ({name}, n={n})"
+            except: pass
+    return None, ""
+
+def _v4_obfuscated_print_calls(code: str) -> Tuple[Optional[str], str]:
+    """Деобфускация через анализ паттернов без исполнения."""
+    # Деобфускаторы типа obfuscator.io для Python
+    if not (code.count('__') > 20 and len(re.findall(r'\b_[0-9a-f]{4,}\b', code)) > 5):
+        return None, ""
+    # Переименование переменных — просто добавляем заметку
+    return DEOBF_TAG + "# Обнаружена обфускация именованием переменных (hash-based)\n# Используй v2 для очистки state-machine\n\n" + code, "hash-rename (detected)"
+
+def deobfuscate_v4(code: str) -> Tuple[Optional[str], str]:
+    methods = [
+        _v4_hex_string_literal, _v4_zlib_b64_norev, _v4_bitwise_not,
+        _v4_multi_xor, _v4_rol_ror, _v4_base62, _v4_base58,
+        _v4_eval_chain, _v4_add_sub_cipher, _v4_compressed_marshal,
+        _v4_string_multiply, _v4_obfuscated_print_calls,
+    ]
+    for fn in methods:
+        try:
+            r, m = fn(code)
+            if r: return r, m
+        except: pass
+    return None, "v4: метод не обнаружен"
+
+# ════════════════════════════════════════════════════════
+#   EXE EXTRACTOR — ВСЕ ФОРМАТЫ
+# ════════════════════════════════════════════════════════
+
+def _detect_exe_type(data: bytes) -> str:
+    if b'MEI\x0c\x0b\x0a\x0b\x0e' in data: return "pyinstaller"
+    if b'PYZ\x00' in data: return "pyinstaller"
+    if b'MEIPASS' in data: return "pyinstaller"
+    if b'_MEIPASS2' in data: return "pyinstaller"
+    if b'__nuitka__' in data: return "nuitka"
+    if b'NUITKA_PACKAGE' in data: return "nuitka"
+    if b'nuitka' in data[:8192].lower(): return "nuitka"
+    if b'__pyx_' in data: return "cython"
+    if b'cython' in data[:4096].lower(): return "cython"
+    if b'cx_Freeze' in data[:8192]: return "cx_freeze"
+    if b'py2exe' in data[:8192].lower(): return "py2exe"
+    if b'zipimport' in data and data[:2] == b'MZ': return "pyinstaller"
+    if data[:2] == b'PK': return "zipapp"
+    if data[:4] == b'\x7fELF':
+        if b'__pyx_' in data: return "cython-elf"
+        return "elf-unknown"
+    if data[:2] == b'MZ': return "pe-unknown"
+    return "unknown"
+
+detect_exe_type = _detect_exe_type
+
+def _extract_pyinstaller(data: bytes, out_dir: str) -> Tuple[bool, str, List[str]]:
+    files = []
+    # Метод 1: pyinstxtractor через subprocess
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".exe", delete=False, dir=out_dir) as f:
+            f.write(data); exe_path = f.name
+
+        script = os.path.join(out_dir, "_pix.py")
+        with open(script, "w") as f:
+            f.write("""
+import sys, os
+sys.argv = ['pyinstxtractor', sys.argv[1]]
 try:
-    import socks
-    SOCKS_OK = True
-except ImportError:
-    SOCKS_OK = False
+    import pyinstxtractor
+    a = pyinstxtractor.PyInstArchive(sys.argv[1])
+    if a.open() and a.checkFile() and a.getCArchiveInfo():
+        a.parseTOC(); a.extractFiles(); a.close()
+        print("OK:" + sys.argv[1] + "_extracted")
+    else:
+        print("FAIL")
+except Exception as e:
+    print("ERR:" + str(e))
+""")
+        r = subprocess.run([sys.executable, script, exe_path],
+                           cwd=out_dir, capture_output=True, text=True, timeout=90)
+        for line in r.stdout.split("\n"):
+            if line.startswith("OK:"):
+                extracted = line[3:].strip()
+                if os.path.exists(extracted):
+                    for root, dirs, fnames in os.walk(extracted):
+                        for fname in fnames:
+                            if fname.endswith(('.py', '.pyc', '.pyz')):
+                                files.append(os.path.join(root, fname))
+                if files:
+                    # Декомпилируем .pyc файлы
+                    decompiled = []
+                    for fp in files:
+                        if fp.endswith('.pyc'):
+                            with open(fp, 'rb') as f: pyc = f.read()
+                            src, _ = _v3_pyc_decompile(pyc)
+                            if src:
+                                out = fp.replace('.pyc', '_decompiled.py')
+                                with open(out, 'w') as f: f.write(src)
+                                decompiled.append(out)
+                        else:
+                            decompiled.append(fp)
+                    return True, f"PyInstaller: извлечено {len(decompiled)} файлов", decompiled
+    except Exception as e:
+        print(f"[pyinstxtractor] {e}")
 
-bot = telebot.TeleBot(TOKEN, parse_mode=None)
+    # Метод 2: ручное сканирование
+    return _extract_pyinstaller_manual(data, out_dir)
 
-# ═══════════════════════════════════════
-#           ДОСТУП / WHITELIST
-# ═══════════════════════════════════════
+def _extract_pyinstaller_manual(data: bytes, out_dir: str) -> Tuple[bool, str, List[str]]:
+    files = []; count = 0
+
+    # Ищем zlib-сжатые блоки (PyInstaller использует zlib для .pyc)
+    pos = 0
+    while pos < len(data) - 4:
+        if data[pos:pos+2] == b'\x78\x9c' or data[pos:pos+2] == b'\x78\xda' or data[pos:pos+2] == b'\x78\x01':
+            for size in range(64, min(len(data) - pos, 5_000_000), 512):
+                try:
+                    raw = zlib.decompress(data[pos:pos+size])
+                    if len(raw) > 100:
+                        text = None
+                        # Пробуем как .pyc
+                        for off in (8, 12, 16):
+                            try:
+                                obj = marshal.loads(raw[off:])
+                                if isinstance(obj, types.CodeType):
+                                    src = _try_marshal_to_source(obj)
+                                    if src:
+                                        text = DEOBF_TAG + src
+                                        break
+                            except: pass
+                        if not text:
+                            try:
+                                text2 = _safe_decode(raw)
+                                if _is_python(text2, 80): text = DEOBF_TAG + text2
+                            except: pass
+                        if text:
+                            fname = os.path.join(out_dir, f"block_{count:04d}.py")
+                            with open(fname, 'w') as f: f.write(text)
+                            files.append(fname); count += 1
+                        break
+                except: pass
+        pos += 1
+        if count >= 50 or pos > 20_000_000: break
+
+    # Ищем строки Python-файлов
+    py_strings = []
+    for magic_str in [b'import ', b'def ', b'class ', b'print(', b'#!/usr/bin/env python']:
+        p = 0
+        while True:
+            idx = data.find(magic_str, p)
+            if idx == -1: break
+            start = max(0, idx - 200)
+            chunk = data[start:idx+4096]
+            try:
+                text = chunk.decode("utf-8", errors="ignore")
+                if _is_python(text, 40):
+                    clean = re.sub(r'[^\x09\x0a\x0d\x20-\x7e]', '', text).strip()
+                    if clean not in py_strings and len(clean) > 40:
+                        py_strings.append(clean)
+            except: pass
+            p = idx + 1
+            if len(py_strings) > 30: break
+
+    if py_strings:
+        fname = os.path.join(out_dir, "extracted_strings.py")
+        with open(fname, 'w') as f:
+            f.write(DEOBF_TAG + "# PyInstaller — извлечённые Python-фрагменты\n\n")
+            for i, s in enumerate(py_strings[:50]):
+                f.write(f"# === Fragment {i+1} ===\n{s}\n\n")
+        files.append(fname)
+
+    if files:
+        return True, f"PyInstaller (manual): {len(files)} файлов", files
+    return False, "PyInstaller: не удалось извлечь", []
+
+def _extract_nuitka(data: bytes, out_dir: str) -> Tuple[bool, str, List[str]]:
+    files = []
+    note = ("# ⚠️  NUITKA EXE\n"
+            "# Nuitka компилирует Python → C → machine code.\n"
+            "# Полный реверс невозможен без оригинальных исходников.\n"
+            "# Извлечены доступные фрагменты.\n\n")
+
+    # Извлекаем строки
+    strings = []
+    i = 0; cur = []
+    while i < min(len(data), 20_000_000):
+        b = data[i]
+        if 32 <= b < 127: cur.append(chr(b))
+        else:
+            if len(cur) >= 12:
+                s = "".join(cur)
+                if any(kw in s for kw in ["import ", "def ", "class ", ".py", "print(", "__"]):
+                    strings.append(s)
+            cur = []
+        i += 1
+
+    # Ищем embedded Python файлы
+    embedded = []
+    for start_marker in [b'# -*-', b'#!/usr/bin/env python', b'import sys\nimport', b'#!/usr']:
+        pos = 0
+        while True:
+            idx = data.find(start_marker, pos)
+            if idx == -1: break
+            chunk = data[idx:idx+8192]
+            try:
+                text = chunk.decode("utf-8", errors="ignore")
+                if _is_python(text, 50): embedded.append((idx, text[:2000]))
+            except: pass
+            pos = idx + 1
+            if len(embedded) > 20: break
+
+    fname = os.path.join(out_dir, "nuitka_analysis.py")
+    with open(fname, 'w') as f:
+        f.write(DEOBF_TAG + note)
+        if embedded:
+            f.write("# === Embedded Python Fragments ===\n")
+            for off, text in embedded[:20]:
+                f.write(f"# --- offset 0x{off:08x} ---\n{text}\n\n")
+        if strings:
+            f.write("# === Python-like Strings ===\n")
+            for s in strings[:200]:
+                f.write(f"# {s}\n")
+    files.append(fname)
+
+    # Создаём инструкцию
+    guide = os.path.join(out_dir, "REVERSE_GUIDE.txt")
+    with open(guide, 'w') as f:
+        f.write("NUITKA REVERSE GUIDE\n" + "="*50 + "\n\n"
+                "1. strings <exe> | grep -E 'def |import |class '\n"
+                "2. IDA Pro + Python FLIRT signatures\n"
+                "3. Ghidra + Python decompiler plugin\n"
+                "4. frida --runtime=qjs -l hook.js <exe>\n"
+                "5. x64dbg + ScyllaHide + Python hooking\n"
+                "6. Search for __pyx_ symbols in binary\n")
+    files.append(guide)
+    return bool(embedded or strings), f"Nuitka: фрагменты извлечены", files
+
+def _extract_cython(data: bytes, filepath: Optional[str], out_dir: str) -> Tuple[bool, str, List[str]]:
+    files = []
+    # Пробуем загрузить модуль
+    if filepath and os.path.exists(filepath):
+        try:
+            import importlib.util, inspect
+            spec = importlib.util.spec_from_file_location("_mod", filepath)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            src_lines = [DEOBF_TAG, "# Cython module stubs\n\n"]
+            for name, obj in inspect.getmembers(mod):
+                if name.startswith("_"): continue
+                if inspect.isfunction(obj) or inspect.isbuiltin(obj):
+                    try:
+                        sig = inspect.signature(obj)
+                        doc = inspect.getdoc(obj) or ""
+                        src_lines.append(f'def {name}{sig}:\n    """{doc}"""\n    ...\n\n')
+                    except: src_lines.append(f"def {name}(...):\n    ...\n\n")
+                elif inspect.isclass(obj):
+                    src_lines.append(f"class {name}:\n")
+                    for mn, mo in inspect.getmembers(obj):
+                        if not mn.startswith("_"):
+                            try: sig = inspect.signature(mo)
+                            except: sig = ""
+                            src_lines.append(f"    def {mn}(self{(', ' + str(sig)[1:]) if str(sig) != '()' else ''}):\n        ...\n\n")
+            fname = os.path.join(out_dir, "cython_stubs.py")
+            with open(fname, 'w') as f: f.writelines(src_lines)
+            files.append(fname)
+            return True, "Cython: stub-сигнатуры извлечены", files
+        except: pass
+
+    # Строки из бинарника
+    strings = []
+    cur = []; i = 0
+    while i < min(len(data), 5_000_000):
+        b = data[i]
+        if 32 <= b < 127: cur.append(chr(b))
+        else:
+            if len(cur) >= 8:
+                s = "".join(cur)
+                if any(kw in s for kw in ["def ", "class ", "return", ".pyx", "import", "cython"]):
+                    strings.append(s)
+            cur = []
+        i += 1
+
+    fname = os.path.join(out_dir, "cython_strings.txt")
+    with open(fname, 'w') as f:
+        f.write(DEOBF_TAG + "# Cython .pyd — извлечённые строки\n\n")
+        for s in strings[:300]: f.write(f"# {s}\n")
+    files.append(fname)
+    return bool(strings), f"Cython: {len(strings)} строк извлечено", files
+
+def _extract_cx_freeze(data: bytes, out_dir: str) -> Tuple[bool, str, List[str]]:
+    """cx_Freeze — ищет library.zip внутри."""
+    files = []
+    # cx_Freeze хранит Python в library.zip
+    pos = data.find(b'PK\x03\x04')
+    if pos != -1:
+        try:
+            zip_data = data[pos:]
+            with tempfile.NamedTemporaryFile(suffix=".zip", delete=False, dir=out_dir) as f:
+                f.write(zip_data); zpath = f.name
+            with zipfile.ZipFile(zpath) as zf:
+                for name in zf.namelist():
+                    if name.endswith(('.py', '.pyc')):
+                        content = zf.read(name)
+                        if name.endswith('.pyc'):
+                            src, _ = _v3_pyc_decompile(content)
+                            if src:
+                                out = os.path.join(out_dir, name.replace('/', '_').replace('.pyc', '.py'))
+                                with open(out, 'w') as f: f.write(src)
+                                files.append(out)
+                        else:
+                            out = os.path.join(out_dir, name.replace('/', '_'))
+                            with open(out, 'wb') as f: f.write(content)
+                            files.append(out)
+            os.unlink(zpath)
+        except: pass
+
+    if files: return True, f"cx_Freeze: {len(files)} файлов", files
+    return False, "cx_Freeze: library.zip не найден", []
+
+def _extract_zipapp(data: bytes, out_dir: str) -> Tuple[bool, str, List[str]]:
+    """ZIP/PYZ архивы."""
+    files = []
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False, dir=out_dir) as f:
+            f.write(data); zpath = f.name
+        with zipfile.ZipFile(zpath) as zf:
+            for name in zf.namelist():
+                content = zf.read(name)
+                if name.endswith('.pyc'):
+                    src, _ = _v3_pyc_decompile(content)
+                    if src:
+                        out = os.path.join(out_dir, name.replace('/', '_').replace('.pyc', '.py'))
+                        with open(out, 'w') as f: f.write(src)
+                        files.append(out)
+                elif name.endswith('.py'):
+                    out = os.path.join(out_dir, name.replace('/', '_'))
+                    with open(out, 'wb') as f: f.write(content)
+                    files.append(out)
+        os.unlink(zpath)
+    except: pass
+    if files: return True, f"ZIP/PYZ: {len(files)} файлов", files
+    return False, "ZIP: не удалось извлечь", []
+
+def _extract_py2exe(data: bytes, out_dir: str) -> Tuple[bool, str, List[str]]:
+    """py2exe — ищет library.zip."""
+    # py2exe хранит library.zip рядом или вшитую
+    pos = data.find(b'library.zip')
+    note = "# py2exe: library.zip найден\n# Распакуй и декомпилируй .pyc файлы\n\n"
+    fname = os.path.join(out_dir, "py2exe_info.txt")
+    with open(fname, 'w') as f:
+        f.write("py2exe EXE REVERSE:\n"
+                "1. Скопируй library.zip из папки с exe\n"
+                "2. unzip library.zip\n"
+                "3. python -m uncompyle6 *.pyc\n")
+    # Пробуем извлечь встроенный zip
+    return _extract_cx_freeze(data, out_dir)
+
+def extract_from_exe(data: bytes, out_dir: str, filename: str = "") -> Tuple[bool, str, List[str]]:
+    os.makedirs(out_dir, exist_ok=True)
+    exe_type = _detect_exe_type(data)
+
+    if exe_type == "pyinstaller":
+        return _extract_pyinstaller(data, out_dir)
+    elif exe_type == "nuitka":
+        return _extract_nuitka(data, out_dir)
+    elif exe_type in ("cython", "cython-elf"):
+        return _extract_cython(data, filename if filename and os.path.exists(filename) else None, out_dir)
+    elif exe_type == "cx_freeze":
+        return _extract_cx_freeze(data, out_dir)
+    elif exe_type == "py2exe":
+        return _extract_py2exe(data, out_dir)
+    elif exe_type == "zipapp":
+        return _extract_zipapp(data, out_dir)
+    elif exe_type in ("pe-unknown", "elf-unknown"):
+        # Пробуем всё по очереди
+        for fn in [_extract_pyinstaller, _extract_cx_freeze, lambda d, o: _extract_nuitka(d, o)]:
+            try:
+                ok, msg, files = fn(data, out_dir)
+                if ok: return ok, msg, files
+            except: pass
+        return _extract_nuitka(data, out_dir)
+    else:
+        ok, msg, files = _extract_pyinstaller(data, out_dir)
+        if ok: return ok, msg, files
+        return _extract_zipapp(data, out_dir)
+
+# ════════════════════════════════════════════════════════
+#   ГЛАВНЫЙ ИНТЕРФЕЙС
+# ════════════════════════════════════════════════════════
+
+def auto_deobfuscate(code: str) -> Tuple[Optional[str], str]:
+    """v1 → v3 → v4 → v2"""
+    r, m = deobfuscate_v1(code)
+    if r: return r, f"v1: {m}"
+    r, m = deobfuscate_v3(code)
+    if r: return r, f"v3: {m}"
+    r, m = deobfuscate_v4(code)
+    if r: return r, f"v4: {m}"
+    result = deobfuscate_v2(code)
+    if result and result != code:
+        return result, "v2: Ренди 2.0 Universal"
+    return None, "Метод не обнаружен — возможно уже чистый код"
+
+def detect_all_methods(code: str) -> dict:
+    return {
+        "v1":              _v1_detect(code),
+        "v3":              detect_v3_method(code),
+        "has_exec":        bool(re.search(r'exec\s*\(', code)),
+        "has_base64":      bool(re.search(r'[A-Za-z0-9+/=]{50,}', code)),
+        "has_xor":         bool(re.search(r'bytes\.fromhex|b\s*\^\s*\d+|\[\s*b\s*\^\s*', code)),
+        "has_state_machine":bool(re.search(r'while\s+\w+\s*!=\s*\d+', code)),
+        "has_wrappers":    bool(re.search(r'def\s+\w+\s*\(\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)', code)),
+        "has_chr":         len(re.findall(r'\bchr\s*\(\s*\d+\s*\)', code)),
+        "has_marshal":     "marshal" in code,
+        "has_pyarmor":     "__pyarmor__" in code or "pyarmor_runtime" in code,
+        "has_hyperion":    bool(re.search(r"range\s*\(\s*256\s*\)", code)),
+        "has_rot13":       "rot_13" in code or "rot-13" in code.lower(),
+        "has_lambda_chain":bool(re.search(r'\(lambda\s+\w+\s*:', code)),
+        "has_decimal_array":bool(re.search(r'chr\s*\(\s*\d{2,3}\s*\)', code)),
+        "has_reverse":     "[::-1]" in code,
+        "has_bz2":         "bz2" in code,
+        "has_lzma":        "lzma" in code,
+        "lines":           code.count('\n') + 1,
+        "chars":           len(code),
+    }
+
+def detect_v3_method(code: str) -> str:
+    checks = {
+        "plain-base64":    lambda c: bool(re.search(r"exec\s*\(\s*(?:base64\.b64decode|__import__\(['\"]base64['\"]\)\.b64decode)", c)),
+        "rot13":           lambda c: "rot_13" in c or "rot-13" in c.lower(),
+        "xor-fixed-key":   lambda c: bool(re.search(r"bytes\(\[b\s*\^\s*\w+\s+for\s+b\s+in", c)),
+        "hex-exec":        lambda c: bool(re.search(r"exec\s*\(\s*['\"](?:\\x[0-9a-fA-F]{2}){10,}['\"]", c)),
+        "compile+marshal": lambda c: "marshal.loads" in c,
+        "chr-obfuscate":   lambda c: len(re.findall(r'\bchr\s*\(\s*\d+\s*\)', c)) >= 5,
+        "pyarmor":         lambda c: "__pyarmor__" in c or "pyarmor_runtime" in c,
+        "hyperion":        lambda c: bool(re.search(r"range\s*\(\s*256\s*\)", c) and re.search(r"def\s+\w+\s*\(\s*\w+\s*,\s*\w+\s*\)", c)),
+        "opy":             lambda c: "__pragma__" in c,
+        "reverse-string":  lambda c: "[::-1]" in c and "exec" in c,
+        "lambda-chain":    lambda c: bool(re.search(r'\(lambda\s+\w+\s*:', c) and "exec" in c),
+        "decimal-array":   lambda c: bool(re.search(r'chr\s*\(\s*\d{2,3}\s*\)', c) and c.count('chr(') > 3),
+        "bz2":             lambda c: "bz2.decompress" in c,
+        "lzma":            lambda c: "lzma.decompress" in c and "base64" in c,
+    }
+    detected = [name for name, fn in checks.items() if fn(code)]
+    return ", ".join(detected) if detected else "не определён"
+
+# Публичные псевдонимы
+decode_xor_strings   = _r2_decode_xor
+decode_hex_escapes   = _r2_decode_hex_escapes
+v3_pyc_decompile     = _v3_pyc_decompile
+v3_pyz_extract       = _v3_pyz_extract
+v3_plain_b64         = _v3_plain_b64
+v3_rot13             = _v3_rot13
+v3_pyobfuscate       = _v3_chr_obfuscate
+v3_pyarmor           = _v3_pyarmor
+v3_hyperion          = _v3_hyperion
+v3_marshal_chain     = _v3_marshal_chain
+
+
+# ════════════════════════════════════════════════════════════
+#   BOT
+# ════════════════════════════════════════════════════════════
+
+import telebot, threading, os, shutil, tempfile, time, json, re, sys
+import hashlib, random, traceback
+from datetime import datetime, timedelta
+from telebot import types
+# Engine is embedded above
+# ══════════════════════════════════════════════════════
+#   КОНФИГ
+# ══════════════════════════════════════════════════════
+TOKEN      = "8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30"
+ADMIN_IDS  = {7321093872}
+BOT_NAME   = "Togaff Deobfuscator"
+BOT_TAG    = "@ArrhythmiaFucksn"
+BOT_VER    = f"v{VERSION}"
+
+USERS_FILE  = "users.json"
+BANNED_FILE = "banned.json"
+STATS_FILE  = "stats.json"
+LOG_FILE    = "activity.log"
+
+ALLOWED_EXT = {'.py', '.pyc', '.pyw', '.exe', '.pyd', '.so', '.pyz', '.zip', '.pyc2', '.pyc3'}
+MAX_FILE_MB = 25
+
+# ══════════════════════════════════════════════════════
+#   ПЕРСОНАЖИ — ASTOLFO PACK
+# ══════════════════════════════════════════════════════
+ASTOLFO_FACES = [
+    "(\\(\\  ∧＿∧\n(｡•ω•｡)つ━━✿✿✿",
+    "(\\(\\  ˘ω˘ )\n(っ･∀･)っ━━★",
+    "(\\(\\  ^•ω•^\n(⁠っ⁠˘⁠ω⁠˘⁠ς⁠)  ✿",
+    "( ˘ω˘ )つ━━✿",
+    "(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧",
+    "(◕‿◕✿) ⋆⭐",
+    "≧◡≦ ✨",
+    "( •̀ ω •́ )✧",
+    "(。◕‿‿◕。)♡",
+    "♡(˃͈ દ ˂͈ ༶ )",
+]
+
+LOADING_FRAMES = [
+    "▱▱▱▱▱▱▱▱▱▱  0%",
+    "▰▱▱▱▱▱▱▱▱▱ 10%",
+    "▰▰▰▱▱▱▱▱▱▱ 30%",
+    "▰▰▰▰▰▱▱▱▱▱ 50%",
+    "▰▰▰▰▰▰▰▱▱▱ 70%",
+    "▰▰▰▰▰▰▰▰▰▱ 90%",
+    "▰▰▰▰▰▰▰▰▰▰ 100% ✅",
+]
+
+SPIN_FRAMES = ["⣾","⣽","⣻","⢿","⡿","⣟","⣯","⣷"]
+
+DECODE_MSGS = [
+    "Взламываю защиту", "Анализирую паттерны", "Снимаю слои шифрования",
+    "Дешифрую payload", "Разворачиваю обфускацию", "Раскрываю секреты кода",
+    "Обходю PyArmor", "Парсю байткод", "Декодирую строки", "Финальная очистка",
+]
+
+DONE_MSGS = [
+    "Готово~ ✅ файл декодирован! 🌸",
+    "Ура~ всё распаковано! ✨",
+    "Готово! Код больше не скрывает секретов~ 💕",
+    "Расшифровано~ держи файлик! 🎀",
+    "Вуаля~ обфускация снята! ⭐",
+]
+
+FAIL_MSGS = [
+    "Не удалось декодировать~ попробуй другой режим",
+    "Хмм~ метод не подошёл, пробуй АВТО",
+    "Файл сопротивляется~ попробуй АВТО или другой режим",
+]
+
+# ══════════════════════════════════════════════════════
+#   ХРАНИЛИЩЕ
+# ══════════════════════════════════════════════════════
 def _load(path, default):
     try:
         if os.path.exists(path):
-            return json.load(open(path, encoding="utf-8"))
-    except:
-        pass
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except: pass
     return default
 
 def _save(path, data):
     try:
-        json.dump(data, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-    except:
-        pass
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[save] {e}")
 
-allowed_users: dict = _load(USERS_FILE, {})
-banned_users:  set  = set(_load(BANNED_FILE, []))
-_save_lock = threading.Lock()
+_lock = threading.Lock()
+users:  dict = _load(USERS_FILE,  {})
+banned: set  = set(_load(BANNED_FILE, []))
+stats:  dict = _load(STATS_FILE,  {"total_files": 0, "total_users": 0, "methods": {}, "daily": {}})
 
-def save_users():
-    with _save_lock:
-        _save(USERS_FILE,  {str(k): v for k, v in allowed_users.items()})
-        _save(BANNED_FILE, list(banned_users))
+def save_all():
+    with _lock:
+        _save(USERS_FILE,  {str(k): v for k, v in users.items()})
+        _save(BANNED_FILE, list(banned))
+        _save(STATS_FILE,  stats)
 
-def is_admin(uid):
-    return int(uid) in ADMIN_IDS
+def log(msg: str):
+    try:
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(LOG_FILE, 'a', encoding='utf-8') as f:
+            f.write(f"[{ts}] {msg}\n")
+    except: pass
 
-def is_banned(uid):
-    return int(uid) in {int(b) for b in banned_users}
+def ts(): return datetime.now().strftime("%d.%m %H:%M")
+def today(): return datetime.now().strftime("%Y-%m-%d")
 
+def is_admin(uid): return int(uid) in ADMIN_IDS
+def is_banned(uid): return int(uid) in {int(b) for b in banned}
 def is_allowed(uid):
     uid = int(uid)
-    if is_admin(uid):
-        return True
-    if is_banned(uid):
-        return False
-    return str(uid) in allowed_users or uid in allowed_users
+    if is_admin(uid): return True
+    if is_banned(uid): return False
+    return str(uid) in users or uid in users
 
-def access_required(fn):
-    def wrapper(obj, *a, **kw):
+def get_user(uid) -> dict:
+    return users.get(str(uid), users.get(uid, {}))
+
+def update_stats(method: str):
+    stats["total_files"] = stats.get("total_files", 0) + 1
+    m = stats.setdefault("methods", {})
+    m[method] = m.get(method, 0) + 1
+    d = stats.setdefault("daily", {})
+    d[today()] = d.get(today(), 0) + 1
+    if len(d) > 30:
+        oldest = sorted(d.keys())[0]
+        del d[oldest]
+
+# ══════════════════════════════════════════════════════
+#   БОТ
+# ══════════════════════════════════════════════════════
+bot = telebot.TeleBot(TOKEN, parse_mode=None)
+
+def _send(cid, text, kb=None, **kw):
+    try: return bot.send_message(cid, text, reply_markup=kb, **kw)
+    except Exception as e: print(f"[send] {e}")
+
+def _edit(cid, mid, text, kb=None):
+    try: return bot.edit_message_text(text, cid, mid, reply_markup=kb)
+    except Exception as e: print(f"[edit] {e}")
+
+def _delete(cid, mid):
+    try: bot.delete_message(cid, mid)
+    except: pass
+
+def _answer(call, text="", alert=False):
+    try: bot.answer_callback_query(call.id, text, show_alert=alert)
+    except: pass
+
+# ══════════════════════════════════════════════════════
+#   АНИМАЦИИ
+# ══════════════════════════════════════════════════════
+def animate_loading(cid, mid, prefix="", steps=None, delay=0.45):
+    """Анимирует прогресс-бар."""
+    frames = steps or LOADING_FRAMES
+    for frame in frames:
         try:
-            uid  = obj.from_user.id
-            chat = obj.chat.id if hasattr(obj, "chat") and obj.chat else obj.message.chat.id
-        except:
-            return
-        if not is_allowed(uid):
-            _send(chat,
-                "🌸 Привет, анон!\n\n"
-                "🔒 Доступ закрыт — бот работает только по приглашению.\n"
-                "Напиши администратору чтобы получить доступ~ 💕")
-            return
-        return fn(obj, *a, **kw)
-    wrapper.__name__ = fn.__name__
-    return wrapper
-
-def ts():
-    return datetime.now().strftime("%d.%m %H:%M")
-
-# ═══════════════════════════════════════
-#            МОИ ПРОКСИ
-# ═══════════════════════════════════════
-MY_PROXIES_HTTP = [
-    ("185.221.160.253", 80), ("185.221.160.214", 80), ("87.239.31.42", 80),
-    ("109.197.153.121", 8888), ("188.235.146.220", 80), ("94.26.241.120", 80),
-    ("89.23.112.143", 80), ("91.222.238.112", 80), ("82.208.111.19", 8080),
-    ("185.244.173.101", 80), ("185.221.152.147", 80), ("91.107.124.250", 80),
-    ("212.96.201.54", 80), ("5.180.241.126", 80), ("195.91.179.91", 80),
-    ("95.217.105.20", 80), ("37.120.189.106", 80), ("89.31.143.1", 80),
-    ("78.47.138.199", 80), ("89.31.143.2", 80), ("195.201.34.206", 80),
-    ("89.31.143.3", 80), ("167.86.97.239", 8080), ("138.201.245.91", 8080),
-    ("89.31.143.12", 80), ("51.178.43.147", 80), ("87.247.251.24", 80),
-    ("83.143.145.67", 80), ("85.26.218.76", 80), ("162.19.226.235", 80),
-    ("5.188.31.212", 80), ("87.247.251.240", 80), ("207.254.28.68", 80),
-    ("104.167.29.113", 80), ("116.202.102.255", 80), ("77.238.66.2", 80),
-    ("217.115.115.252", 80), ("85.187.17.39", 80), ("213.135.166.142", 80),
-    ("217.145.93.115", 80), ("141.105.107.34", 80), ("93.170.73.47", 80),
-    ("31.7.38.227", 80),
-]
-
-
-
-# ═══════════════════════════════════════
-#          ИСТОЧНИКИ ПРОКСИ
-# ═══════════════════════════════════════
-SOURCES = {
-    "socks5": [
-        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
-        "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt",
-        "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/socks5.txt",
-        "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt",
-        "https://raw.githubusercontent.com/roosterkid/openproxylist/main/SOCKS5_RAW.txt",
-        "https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks5.txt",
-        "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/socks5/data.txt",
-        "https://raw.githubusercontent.com/ErcinDedeoglu/proxies/main/proxies/socks5.txt",
-    ],
-    "socks4": [
-        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks4.txt",
-        "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/socks4.txt",
-        "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks4.txt",
-        "https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks4.txt",
-        "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/socks4/data.txt",
-    ],
-    "http": [
-        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
-        "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/http.txt",
-        "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt",
-        "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt",
-        "https://raw.githubusercontent.com/mmpx12/proxy-list/master/http.txt",
-        "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt",
-        "https://raw.githubusercontent.com/ErcinDedeoglu/proxies/main/proxies/http.txt",
-        "https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/http.txt",
-    ],
-}
-
-# ═══════════════════════════════════════
-#               КЭШ
-# ═══════════════════════════════════════
-cache = {
-    "socks5": [], "socks4": [], "http": [],
-    "updated": 0, "top_fast": [], "top_updated": 0,
-    "scan_lock": threading.Lock(),
-}
-users = {}
-
-def get_user(uid):
-    uid = int(uid)
-    if uid not in users:
-        users[uid] = {
-            "connected": False, "proxy": None, "connect_time": None,
-            "ip_before": None, "ip_after": None,
-            "sessions": 0, "total_rotates": 0,
-            "bytes_up": 0, "bytes_down": 0,
-        }
-    return users[uid]
-
-# ═══════════════════════════════════════
-#         ЗАГРУЗКА ПРОКСИ
-# ═══════════════════════════════════════
-def fetch_list(url, timeout=14):
-    try:
-        r = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0"})
-        if r.status_code != 200:
-            return []
-        out = []
-        for line in r.text.splitlines():
-            line = re.sub(r"^(socks[45]|https?|connect)://", "", line.strip(), flags=re.I)
-            m = re.match(r"^(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})", line)
-            if m:
-                out.append((m.group(1), int(m.group(2))))
-        return out
-    except:
-        return []
-
-def refresh_cache(force=False):
-    if not force and time.time() - cache["updated"] < CACHE_TTL:
-        return
-    print("🌸 Загружаю прокси...")
-    my_seen = {f"{h}:{p}" for h, p in MY_PROXIES_HTTP}
-    my_list = list(MY_PROXIES_HTTP)
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        for ptype, urls in SOURCES.items():
-            base = list(my_list) if ptype == "http" else []
-            seen = set(my_seen) if ptype == "http" else set()
-            futs = {ex.submit(fetch_list, url): url for url in urls}
-            for fut in as_completed(futs):
-                for h, p in fut.result():
-                    k = f"{h}:{p}"
-                    if k not in seen:
-                        seen.add(k)
-                        base.append((h, p))
-                if len(base) >= 800:
-                    break
-            if ptype == "http":
-                tail = base[len(my_list):]
-                random.shuffle(tail)
-                cache[ptype] = (my_list + tail)[:500]
-            else:
-                random.shuffle(base)
-                cache[ptype] = base[:500]
-            print(f"  {ptype}: {len(cache[ptype])}")
-    cache["updated"] = time.time()
-    print("✅ Кэш обновлён")
-
-# ═══════════════════════════════════════
-#       ПРОВЕРКА ПРОКСИ
-# ═══════════════════════════════════════
-IP_URLS = [
-    "http://api.ipify.org",
-    "http://checkip.amazonaws.com",
-    "http://icanhazip.com",
-    "http://ip.42.pl/raw",
-    "http://ipecho.net/plain",
-]
-
-def tcp_ping(host, port, timeout=1.5):
-    try:
-        t0 = time.time()
-        with socket.create_connection((host, port), timeout=timeout):
-            pass
-        return round((time.time() - t0) * 1000, 1)
-    except:
-        return None
-
-def _proxy_url(ptype, host, port):
-    if ptype == "socks5" and SOCKS_OK:
-        return f"socks5h://{host}:{port}"
-    if ptype == "socks4" and SOCKS_OK:
-        return f"socks4://{host}:{port}"
-    return f"http://{host}:{port}"
-
-def get_ip_via(ptype, host, port, timeout=7):
-    prx = {"http": _proxy_url(ptype, host, port), "https": _proxy_url(ptype, host, port)}
-    for url in IP_URLS:
-        try:
-            r = requests.get(url, proxies=prx, timeout=timeout,
-                             headers={"User-Agent": "curl/7.80.0"})
-            ip = r.text.strip().split()[0]
-            if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", ip):
-                return ip
-        except:
-            continue
-    return None
-
-def get_my_ip(timeout=7):
-    for url in IP_URLS:
-        try:
-            r = requests.get(url, timeout=timeout)
-            ip = r.text.strip().split()[0]
-            if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", ip):
-                return ip
-        except:
-            continue
-    return None
-
-def verify_proxy(ptype, host, port, my_ip, tcp_t=1.5, ip_t=7):
-    ms = tcp_ping(host, port, timeout=tcp_t)
-    if ms is None:
-        return None
-    new_ip = get_ip_via(ptype, host, port, timeout=ip_t)
-    if not new_ip:
-        return None
-    if my_ip and new_ip == my_ip:
-        return None
-    return {"type": ptype, "host": host, "port": port, "ping": ms,
-            "new_ip": new_ip, "verified_at": time.time()}
-
-# ═══════════════════════════════════════
-#       СМАРТ-ПУЛ
-# ═══════════════════════════════════════
-def _all_candidates(ptype_filter=None):
-    order = (["socks5", "socks4", "http"] if SOCKS_OK else ["http", "socks4", "socks5"])
-    if ptype_filter:
-        order = [ptype_filter]
-    out = []
-    seen = set()
-    if not ptype_filter or ptype_filter == "http":
-        for h, p in MY_PROXIES_HTTP:
-            if (h, p) not in seen:
-                seen.add((h, p))
-                out.append(("http", h, p))
-    for pt in order:
-        pool = list(cache[pt])
-        random.shuffle(pool)
-        for h, p in pool:
-            if (h, p) not in seen:
-                seen.add((h, p))
-                out.append((pt, h, p))
-    return out
-
-def _tcp_scan(candidates, workers=60, timeout=1.2):
-    results = []
-    lock = threading.Lock()
-
-    def chk(args):
-        pt, h, p = args
-        ms = tcp_ping(h, p, timeout=timeout)
-        if ms is not None:
-            with lock:
-                results.append((ms, pt, h, p))
-
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        list(as_completed([ex.submit(chk, c) for c in candidates]))
-    results.sort()
-    return [(pt, h, p, ms) for ms, pt, h, p in results]
-
-def build_smart_pool(my_ip=None, sample=SCAN_SAMPLE,
-                     workers=VERIFY_WORKERS, tcp_cb=None, http_cb=None):
-    if my_ip is None:
-        my_ip = get_my_ip() or ""
-    refresh_cache()
-    all_c = _all_candidates()
-    random.shuffle(all_c)
-    cands = all_c[:sample]
-    total = len(cands)
-    tcp_done = [0]
-    lock = threading.Lock()
-
-    def tcp_chk(args):
-        pt, h, p = args
-        ms = tcp_ping(h, p, timeout=1.2)
-        with lock:
-            tcp_done[0] += 1
-            if tcp_cb:
-                tcp_cb(tcp_done[0], total)
-        return (ms, pt, h, p) if ms else None
-
-    alive_raw = []
-    with ThreadPoolExecutor(max_workers=60) as ex:
-        for res in as_completed([ex.submit(tcp_chk, c) for c in cands]):
-            r = res.result()
-            if r:
-                alive_raw.append(r)
-    alive_raw.sort()
-    alive = [(pt, h, p, ms) for ms, pt, h, p in alive_raw]
-    print(f"  TCP живых: {len(alive)}/{total}")
-    if not alive:
-        return []
-
-    http_total = len(alive)
-    http_done = [0]
-    lock2 = threading.Lock()
-    results = []
-    rlock = threading.Lock()
-
-    def http_chk(args):
-        pt, h, p, ms = args
-        new_ip = get_ip_via(pt, h, p, timeout=7)
-        with lock2:
-            http_done[0] += 1
-            if http_cb:
-                http_cb(http_done[0], http_total)
-        if not new_ip or new_ip == my_ip:
-            return None
-        return {"type": pt, "host": h, "port": p, "ping": ms,
-                "new_ip": new_ip, "verified_at": time.time()}
-
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        for res in as_completed([ex.submit(http_chk, a) for a in alive]):
-            r = res.result()
-            if r:
-                with rlock:
-                    results.append(r)
-
-    results.sort(key=lambda x: x["ping"])
-    cache["top_fast"] = results[:TOP_FAST_COUNT]
-    cache["top_updated"] = time.time()
-    print(f"🌸 Смарт-пул: {len(cache['top_fast'])} прокси")
-    return cache["top_fast"]
-
-def smart_pool_refresh_bg(my_ip=""):
-    if time.time() - cache["top_updated"] > TOP_TTL and not cache["scan_lock"].locked():
-        def bg():
-            with cache["scan_lock"]:
-                build_smart_pool(my_ip, sample=SCAN_SAMPLE // 2)
-        threading.Thread(target=bg, daemon=True).start()
-
-def find_best_proxy(my_ip, exclude=None, ptype_filter=None, on_try=None):
-    pool = [p for p in cache["top_fast"]
-            if (not exclude or p["host"] != exclude)
-            and (not ptype_filter or p["type"] == ptype_filter)]
-
-    if pool:
-        found = [None]
-        stop = threading.Event()
-        lock = threading.Lock()
-
-        def recheck(px):
-            if stop.is_set():
-                return
-            r = verify_proxy(px["type"], px["host"], px["port"], my_ip, tcp_t=1.5, ip_t=7)
-            if r and not stop.is_set():
-                with lock:
-                    if found[0] is None:
-                        found[0] = r
-                        stop.set()
-
-        with ThreadPoolExecutor(max_workers=min(len(pool), 20)) as ex:
-            for f in as_completed([ex.submit(recheck, px) for px in pool]):
-                if stop.is_set():
-                    break
-        if found[0]:
-            return found[0]
-
-    refresh_cache()
-    all_c = _all_candidates(ptype_filter)
-    if exclude:
-        all_c = [(pt, h, p) for pt, h, p in all_c if h != exclude]
-
-    batch = 80
-    n = 0
-    for i in range(0, min(len(all_c), VERIFY_LIMIT * 2), batch):
-        chunk = all_c[i:i + batch]
-        alive = _tcp_scan(chunk, workers=60, timeout=1.2)
-        n += len(chunk)
-        if on_try:
-            on_try(n,
-                   alive[0][0] if alive else "http",
-                   alive[0][1] if alive else "...",
-                   alive[0][3] if alive else 0)
-        if not alive:
-            continue
-
-        found = [None]
-        stop = threading.Event()
-        lock = threading.Lock()
-
-        def http_find(args):
-            pt, h, p, ms = args
-            if stop.is_set():
-                return
-            new_ip = get_ip_via(pt, h, p, timeout=7)
-            if new_ip and new_ip != my_ip and not stop.is_set():
-                with lock:
-                    if found[0] is None:
-                        found[0] = {"type": pt, "host": h, "port": p, "ping": ms,
-                                    "new_ip": new_ip, "verified_at": time.time()}
-                        stop.set()
-
-        with ThreadPoolExecutor(max_workers=VERIFY_WORKERS) as ex:
-            for f in as_completed([ex.submit(http_find, a) for a in alive]):
-                if stop.is_set():
-                    break
-        if found[0]:
-            return found[0]
-    return None
-
-# ═══════════════════════════════════════
-#   ДЕОБФУСКАТОР v1 — ИСПРАВЛЕННАЯ ВЕРСИЯ
-#
-#  Исправлено 6 багов:
-#  1. _exec_pattern: теперь ловит все варианты
-#       exec((_)(b'...')), exec(_(b"...")),
-#       exec((__)(b'...')), с пробелами, двойными кавычками
-#  2. Padding: (8-pad) → правильный (4-pad)%4
-#  3. _deobf_combo: теперь тоже удаляет lambda-обёртку
-#  4. rendy: добавлен re.DOTALL для многострочных payload
-#  5. _strip_comments: не ломает строки содержащие # (url, цвета и т.д.)
-#  6. combo detect-паттерны: исправлен 's*' → '\s*' (пробел после decompress())
-# ═══════════════════════════════════════
-
-# Универсальный паттерн exec-обёртки — ловит все реальные варианты:
-#   exec((_)(b'...'))   exec((_)(b"..."))
-#   exec(_(b'...'))     exec(_(b"..."))
-#   exec((__)(b'...'))  с произвольными пробелами
-_exec_pattern = r"""exec\(\s*\(?\s*_+\s*\)?\s*\(\s*b['"]([\s\S]+?)['"]\s*\)\s*\)"""
-
-_deobf_note = "# DECODED BY @ArrhythmiaFucksn\n\n"
-
-# Все паттерны обнаружения — исправлено: \s*; вместо ; и \s* вместо s*
-_obfuscation_patterns = {
-    # Простые однослойные
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\s*;": "base64",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\s*;": "base32",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\s*;": "base16",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(__\[::-1\]\)\s*;":  "zlib",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(__\[::-1\]\)\s*;":  "gzip",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(__\[::-1\]\)\s*;":  "lzma",
-    # Комбо base64 + компрессор (исправлено: \s* вместо s*)
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\s*\)\s*;": "base64+zlib",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\s*\)\s*;": "base64+gzip",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\s*\)\s*;": "base64+lzma",
-    # Комбо base32 + компрессор
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\s*\)\s*;": "base32+zlib",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\s*\)\s*;": "base32+gzip",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\s*\)\s*;": "base32+lzma",
-    # Комбо base16 + компрессор
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('zlib'\)\.decompress\(\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\s*\)\s*;": "base16+zlib",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('gzip'\)\.decompress\(\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\s*\)\s*;": "base16+gzip",
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('lzma'\)\.decompress\(\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\s*\)\s*;": "base16+lzma",
-    # Rendy obf полный паттерн
-    r"_\s*=\s*lambda\s*__\s*:\s*__import__\('marshal'\)\.loads\(\s*__import__\('gzip'\)\.decompress\(\s*__import__\('lzma'\)\.decompress\(\s*__import__\('zlib'\)\.decompress\(\s*__import__\('base64'\)\.b64decode\(\s*__\[::-1\]\s*\)\s*\)\s*\)\s*\)\s*\)\s*;": "rendy (marshal+gzip+lzma+zlib+base64)",
-}
-
-def _b64_pad(s: str) -> str:
-    """Правильный padding: добавляем (4 - len%4) % 4 символов '='"""
-    pad = len(s) % 4
-    if pad:
-        s += "=" * (4 - pad)
-    return s
-
-def _strip_comments(code: str) -> str:
-    """
-    Удаляет комментарии Python (#...) но НЕ трогает # внутри строк.
-    Построчный анализ: находим # только вне строковых литералов.
-    """
-    result_lines = []
-    for line in code.split("\n"):
-        in_single = False
-        in_double = False
-        out = []
-        i = 0
-        while i < len(line):
-            c = line[i]
-            if c == "'" and not in_double:
-                in_single = not in_single
-                out.append(c)
-            elif c == '"' and not in_single:
-                in_double = not in_double
-                out.append(c)
-            elif c == "#" and not in_single and not in_double:
-                break  # реальный комментарий — обрезаем
-            else:
-                out.append(c)
-            i += 1
-        result_lines.append("".join(out).rstrip())
-    return "\n".join(result_lines)
-
-def _deobf_b64(code: str) -> str:
-    """Декодирует base64-обфускацию. Многопроходный — снимает вложенные слои."""
-    def dec(m):
-        try:
-            return base64.b64decode(_b64_pad(m.group(1))[::-1]).decode("utf-8", errors="replace")
-        except Exception as e:
-            return f"# [v1 b64 err: {e}]\n"
-    prev = None
-    while prev != code and re.search(_exec_pattern, code):
-        prev = code
-        code = re.sub(_exec_pattern, dec, code)
-        code = re.sub(
-            r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b64decode\(__\[::-1\]\)\s*;?",
-            "", code)
-    return _strip_comments(code).strip()
-
-def _deobf_b32(code: str) -> str:
-    """Декодирует base32-обфускацию."""
-    def dec(m):
-        try:
-            return base64.b32decode(_b64_pad(m.group(1))[::-1]).decode("utf-8", errors="replace")
-        except Exception as e:
-            return f"# [v1 b32 err: {e}]\n"
-    prev = None
-    while prev != code and re.search(_exec_pattern, code):
-        prev = code
-        code = re.sub(_exec_pattern, dec, code)
-        code = re.sub(
-            r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b32decode\(__\[::-1\]\)\s*;?",
-            "", code)
-    return _strip_comments(code).strip()
-
-def _deobf_b16(code: str) -> str:
-    """Декодирует base16/hex-обфускацию. Padding для hex не нужен."""
-    def dec(m):
-        try:
-            return base64.b16decode(m.group(1)[::-1].upper()).decode("utf-8", errors="replace")
-        except Exception as e:
-            return f"# [v1 b16 err: {e}]\n"
-    prev = None
-    while prev != code and re.search(_exec_pattern, code):
-        prev = code
-        code = re.sub(_exec_pattern, dec, code)
-        code = re.sub(
-            r"_\s*=\s*lambda\s*__\s*:\s*__import__\('base64'\)\.b16decode\(__\[::-1\]\)\s*;?",
-            "", code)
-    return _strip_comments(code).strip()
-
-def _deobf_compress_only(code: str, compress_mod, mod_name: str) -> str:
-    """Декодирует чистую compress-обфускацию (zlib/gzip/lzma без base-кодирования)."""
-    def dec(m):
-        try:
-            raw = m.group(1).encode("latin-1")
-            return compress_mod.decompress(raw[::-1]).decode("utf-8", errors="replace")
-        except Exception as e:
-            return f"# [v1 {mod_name} err: {e}]\n"
-    prev = None
-    while prev != code and re.search(_exec_pattern, code):
-        prev = code
-        code = re.sub(_exec_pattern, dec, code)
-        code = re.sub(
-            r"_\s*=\s*lambda\s*__\s*:\s*__import__\('" + mod_name + r"'\)\.decompress\(__\[::-1\]\)\s*;?",
-            "", code)
-    return _strip_comments(code).strip()
-
-def _deobf_combo(code: str, base_fn, compress_mod, base_name: str, compress_name: str) -> str:
-    """
-    Декодирует комбо-обфускацию: compress(base_decode(payload[::-1])).
-    Исправлено: теперь тоже удаляет lambda-строку после каждого прохода.
-    """
-    def dec(m):
-        try:
-            decoded = base_fn(_b64_pad(m.group(1))[::-1])
-            return compress_mod.decompress(decoded).decode("utf-8", errors="replace")
-        except Exception as e:
-            return f"# [v1 {base_name}+{compress_name} err: {e}]\n"
-    # Паттерн для удаления lambda-обёртки (с \s* чтобы пробелы не мешали)
-    lambda_pat = (
-        r"_\s*=\s*lambda\s*__\s*:\s*__import__\('" + compress_name + r"'\)\.decompress\(\s*"
-        r"__import__\('base64'\)\." + base_name + r"decode\(__\[::-1\]\)\s*\)\s*;?"
-    )
-    prev = None
-    while prev != code and re.search(_exec_pattern, code):
-        prev = code
-        code = re.sub(_exec_pattern, dec, code)
-        code = re.sub(lambda_pat, "", code)
-    return _strip_comments(code).strip()
-
-def _deobf_rendy(code: str):
-    """
-    Декодирует Rendy-обфускацию: marshal.loads(gzip(lzma(zlib(b64decode(payload[::-1]))))).
-    Исправлено: re.DOTALL для многострочных payload + правильный padding.
-    """
-    # Основной паттерн с re.DOTALL
-    pat_main = (
-        r"_\s*=\s*lambda\s*__\s*:.*?marshal.*?\n?"
-        r"exec\s*\(\s*_\s*\(\s*['\"]"
-        r"([\s\S]+?)"
-        r"['\"]\s*\)\s*\)"
-    )
-    m = re.search(pat_main, code, re.DOTALL)
-    if not m:
-        # Фоллбэк: ищем просто exec(_('...')) с base64-подобным содержимым
-        m = re.search(r"exec\s*\(\s*_\s*\(\s*['\"]([A-Za-z0-9+/=\n]+)['\"]\s*\)\s*\)", code, re.DOTALL)
-    if not m:
-        return None
-    try:
-        enc = m.group(1).replace("\n", "").replace(" ", "")
-        enc = _b64_pad(enc)
-        raw = base64.b64decode(enc[::-1])
-        raw = zlib.decompress(raw)
-        raw = lzma.decompress(raw)
-        raw = gzip.decompress(raw)
-        code_obj = marshal.loads(raw)
-        if isinstance(code_obj, bytes):
-            return code_obj.decode("utf-8", errors="replace")
-        import types as _types, dis as _dis, io as _io
-        if isinstance(code_obj, _types.CodeType):
-            buf = _io.StringIO()
-            _dis.dis(code_obj, file=buf)
-            return f"# [marshal CodeType — дизассемблировано]\n{buf.getvalue()}"
-        return str(code_obj)
-    except Exception as e:
-        return None
-
-def detect_obfuscation(code: str) -> str:
-    """Определяет метод обфускации по паттернам lambda + эвристике exec."""
-    for pat, name in _obfuscation_patterns.items():
-        if re.search(pat, code):
-            return name
-    # Эвристика: если есть exec((_)(b'...')) но lambda уже удалена —
-    # определяем по наличию ключевых слов в коде
-    if re.search(_exec_pattern, code):
-        if "b64decode" in code:
-            if "zlib" in code:   return "base64+zlib"
-            if "gzip" in code:   return "base64+gzip"
-            if "lzma" in code:   return "base64+lzma"
-            return "base64"
-        if "b32decode" in code:
-            if "zlib" in code:   return "base32+zlib"
-            if "gzip" in code:   return "base32+gzip"
-            if "lzma" in code:   return "base32+lzma"
-            return "base32"
-        if "b16decode" in code:
-            if "zlib" in code:   return "base16+zlib"
-            if "gzip" in code:   return "base16+gzip"
-            if "lzma" in code:   return "base16+lzma"
-            return "base16"
-        if "zlib"   in code:     return "zlib"
-        if "gzip"   in code:     return "gzip"
-        if "lzma"   in code:     return "lzma"
-    return None
-
-def deobfuscate_code(code: str) -> tuple:
-    """
-    Главная функция v1 деобфускатора.
-    Возвращает (deobfuscated_code, method_name) или (None, error_msg).
-    """
-    method = detect_obfuscation(code)
-    if not method:
-        return None, "Обфускация не обнаружена"
-    try:
-        result = None
-        if method == "base64":
-            result = _deobf_b64(code)
-        elif method == "base32":
-            result = _deobf_b32(code)
-        elif method == "base16":
-            result = _deobf_b16(code)
-        elif method == "zlib":
-            result = _deobf_compress_only(code, zlib, "zlib")
-        elif method == "gzip":
-            result = _deobf_compress_only(code, gzip, "gzip")
-        elif method == "lzma":
-            result = _deobf_compress_only(code, lzma, "lzma")
-        elif method == "base64+zlib":
-            result = _deobf_combo(code, base64.b64decode, zlib,  "b64", "zlib")
-        elif method == "base64+gzip":
-            result = _deobf_combo(code, base64.b64decode, gzip,  "b64", "gzip")
-        elif method == "base64+lzma":
-            result = _deobf_combo(code, base64.b64decode, lzma,  "b64", "lzma")
-        elif method == "base32+zlib":
-            result = _deobf_combo(code, base64.b32decode, zlib,  "b32", "zlib")
-        elif method == "base32+gzip":
-            result = _deobf_combo(code, base64.b32decode, gzip,  "b32", "gzip")
-        elif method == "base32+lzma":
-            result = _deobf_combo(code, base64.b32decode, lzma,  "b32", "lzma")
-        elif method == "base16+zlib":
-            result = _deobf_combo(code, base64.b16decode, zlib,  "b16", "zlib")
-        elif method == "base16+gzip":
-            result = _deobf_combo(code, base64.b16decode, gzip,  "b16", "gzip")
-        elif method == "base16+lzma":
-            result = _deobf_combo(code, base64.b16decode, lzma,  "b16", "lzma")
-        elif "rendy" in method:
-            result = _deobf_rendy(code)
-        if result is not None:
-            return _deobf_note + result, method
-        return None, f"Не удалось декодировать ({method})"
-    except Exception as e:
-        import traceback
-        tb = traceback.format_exc()
-        print(f"[deobf v1] ERR ({method}):\n{tb}")
-        return None, f"Ошибка ({method}): {e}"
-
-# ═══════════════════════════════════════
-#   ДЕОБФУСКАТОР v2 — Ренди 2.0
-#   Universal Python Deobfuscator
-#   marshal/gzip/lzma/zlib/base64 + XOR
-#   + state-machine + call-wrappers
-# ═══════════════════════════════════════
-
-XOR_ADJ = 2
-
-def r2_try_base64(data: bytes):
-    try:
-        return base64.b64decode(data)
-    except Exception:
-        return None
-
-def r2_try_zlib(data: bytes):
-    try:
-        return zlib.decompress(data)
-    except Exception:
-        return None
-
-def r2_try_gzip(data: bytes):
-    try:
-        return gzip.decompress(data)
-    except Exception:
-        return None
-
-def r2_try_lzma(data: bytes):
-    try:
-        return lzma.decompress(data)
-    except Exception:
-        return None
-
-def r2_try_marshal(data: bytes):
-    for offset in (0, 4, 8, 12, 16):
-        try:
-            code = marshal.loads(data[offset:])
-            if isinstance(code, types.CodeType):
-                out = io.StringIO()
-                dis.dis(code, file=out)
-                return out.getvalue()
-        except Exception:
-            continue
-    return None
-
-def r2_try_decompress_chain(data: bytes, depth: int = 0, max_depth: int = 8) -> bytes:
-    if depth >= max_depth:
-        return data
-    for fn in (r2_try_base64, r2_try_zlib, r2_try_gzip, r2_try_lzma):
-        result = fn(data)
-        if result and result != data:
-            return r2_try_decompress_chain(result, depth + 1, max_depth)
-    return data
-
-def r2_extract_layer1(source: str) -> str:
-    patterns = [
-        r"(?:__[a-z_]+__\s*=\s*)?(?:exec|eval)\s*\(\s*(?:.*?\.)?(?:decompress|loads|decode)\s*\([^)]*?['\"]([ A-Za-z0-9+/=\n]+)['\"]",
-        r"(?:exec|eval)\s*\([^)]*?b['\"]([0-9a-fA-F\\x]+)['\"]",
-    ]
-    for p in patterns:
-        m = re.search(p, source, re.DOTALL)
-        if m:
-            candidate = m.group(1).encode()
-            result = r2_try_decompress_chain(candidate)
-            try:
-                decoded = result.decode('utf-8')
-                if len(decoded) > 50 and ('def ' in decoded or 'import' in decoded):
-                    return decoded
-            except Exception:
-                pass
-
-    blob_pat = re.compile(r"b['\"]([ A-Za-z0-9+/=]{200,})['\"]")
-    for m in blob_pat.finditer(source):
-        candidate = m.group(1).encode()
-        result = r2_try_decompress_chain(candidate)
-        try:
-            decoded = result.decode('utf-8')
-            if 'def ' in decoded or 'import' in decoded:
-                return decoded
-        except Exception:
-            pass
-    return source
-
-def r2_decode_xor(hex_str: str, key: int, adj: int = None) -> str:
-    if adj is None:
-        adj = XOR_ADJ
-    raw = bytes.fromhex(hex_str)
-    return bytes([b ^ (key ^ adj) for b in raw]).decode('utf-8', errors='replace')
-
-def r2_detect_wrapper_names(source: str) -> list:
-    pattern = re.compile(
-        r'def\s+(\w+)\s*\(\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)\s*:[^\n]*\n'
-        r'(?:.*?\n)*?.*?raise\s+\w+\s*\(\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)',
-        re.MULTILINE
-    )
-    names = pattern.findall(source)
-    if names:
-        return list(set(names))
-    return ['俩瀒唼', '摒嬻揿', '獄壧厮', '饜蝶曅', '雽蒃请']
-
-def r2_find_and_decode_xor(line: str) -> tuple:
-    count = 0
-    iter_var = r'\w+'
-    xor_pattern = re.compile(
-        iter_var + r'\s*\^\s*\((\d+)\s*\^'
-        r'[^\n]*?'
-        r"bytes\.fromhex[,\s\[('\"]*([0-9a-fA-F]+)['\"]"
-    )
-    while True:
-        m = xor_pattern.search(line)
-        if not m:
-            break
-        key = int(m.group(1))
-        hex_str = m.group(2)
-        decoded_repr = repr(r2_decode_xor(hex_str, key))
-        hex_quote_pos = line.find(f"'{hex_str}'")
-        if hex_quote_pos == -1:
-            hex_quote_pos = line.find(f'"{hex_str}"')
-        if hex_quote_pos == -1:
-            break
-        decode_end = line.find(".decode, ['utf-8'], {})", hex_quote_pos)
-        if decode_end != -1:
-            end_pos = decode_end + len(".decode, ['utf-8'], {})")
-        else:
-            decode_end = line.find(".decode(['utf-8'])", hex_quote_pos)
-            if decode_end != -1:
-                end_pos = decode_end + len(".decode(['utf-8'])")
-            else:
-                decode_end = line.find(".decode('utf-8')", hex_quote_pos)
-                if decode_end != -1:
-                    end_pos = decode_end + len(".decode('utf-8')")
-                else:
-                    break
-        WRAPPER_NAMES = r2_detect_wrapper_names(line) or ['俩瀒唼', '摒嬻揿', '獄壧厮', '饜蝶曅']
-        wrapper_positions = []
-        for w in WRAPPER_NAMES:
-            pos = 0
-            while True:
-                p = line.find(w, pos)
-                if p == -1 or p >= hex_quote_pos:
-                    break
-                wrapper_positions.append(p)
-                pos = p + len(w)
-        if not wrapper_positions:
-            break
-        wrapper_positions.sort()
-        start_pos = None
-        for wp in reversed(wrapper_positions):
-            wnames_found = [w for w in WRAPPER_NAMES if line[wp:wp+len(w)] == w]
-            wname_len = len(wnames_found[0]) if wnames_found else 3
-            open_paren = wp + wname_len
-            if open_paren >= len(line) or line[open_paren] != '(':
-                continue
-            depth = 0
-            for cp in range(open_paren, min(end_pos, len(line))):
-                if line[cp] == '(':
-                    depth += 1
-                elif line[cp] == ')':
-                    depth -= 1
-            if depth == 0:
-                start_pos = wp
-                break
-        if start_pos is None:
-            inner_start = line.rfind('bytes', 0, hex_quote_pos)
-            if inner_start != -1:
-                for wp in reversed(wrapper_positions):
-                    if wp < inner_start:
-                        start_pos = wp
-                        break
-            if start_pos is None:
-                break
-        count += 1
-        line = line[:start_pos] + decoded_repr + line[end_pos:]
-    return line, count
-
-def r2_decode_all_xor_strings(source: str) -> str:
-    lines = source.split('\n')
-    total = 0
-    result = []
-    for line in lines:
-        if 'fromhex' in line and ('噴蜥巀' in line or '^' in line):
-            new_line, count = r2_find_and_decode_xor(line)
-            total += count
-            result.append(new_line)
-        else:
-            result.append(line)
-    return '\n'.join(result)
-
-def r2_simplify_wrappers(source: str, wrapper_names: list) -> str:
-    if not wrapper_names:
-        return source
-    WRAPPERS_RE = '(?:' + '|'.join(re.escape(w) for w in wrapper_names) + ')'
-    simple = re.compile(WRAPPERS_RE + r'\(([^,\n]+?),\s*\[([^\[\]\n]*?)\],\s*\{\}\)')
-    def simple_r(m):
-        fn = m.group(1).strip()
-        args = m.group(2).strip()
-        return f'{fn}({args})' if args else f'{fn}()'
-    kw = re.compile(WRAPPERS_RE + r'\(([^,\n]+?),\s*\[([^\[\]\n]*?)\],\s*\{([^{}\n]+?)\}\)')
-    def kw_r(m):
-        fn = m.group(1).strip()
-        args = m.group(2).strip()
-        kw_str = re.sub(r"'(\w+)':\s*", r'\1=', m.group(3).strip())
-        return f'{fn}({args}, {kw_str})' if args else f'{fn}({kw_str})'
-    for _ in range(12):
-        new = simple.sub(simple_r, source)
-        new = kw.sub(kw_r, new)
-        if new == source:
-            break
-        source = new
-    return source
-
-def r2_remove_state_machine(source: str) -> str:
-    final = []
+            bot.edit_message_text(f"{prefix}\n\n{frame}", cid, mid)
+            time.sleep(delay)
+        except: time.sleep(delay)
+
+def animate_spinner(cid, mid, text, seconds=2.0, suffix=""):
+    """Крутящийся спиннер."""
+    end = time.time() + seconds
     i = 0
-    lines = source.split('\n')
-    while i < len(lines):
-        line = lines[i]
-        s = line.strip()
-        if re.match(r'^while \w+ != \d+:\s*$', s):
-            i += 1; continue
-        if re.match(r'^(?:if|elif) \w+ == \d{5,9}:\s*$', s):
-            i += 1; continue
-        if re.match(r'^\w+ = \d{5,9}\s*$', s):
-            i += 1; continue
-        if re.match(r'^if \(\w+ \* \w+ \+ \w+\) % 2 == 0:\s*$', s):
-            indent = len(line) - len(line.lstrip())
-            i += 1
-            while i < len(lines):
-                bl = lines[i]
-                bs = bl.strip()
-                bi = len(bl) - len(bl.lstrip()) if bs else 0
-                if bs and bi <= indent:
-                    break
-                if bs:
-                    final.append(bl[4:] if bl.startswith('    ') else bl)
-                i += 1
-            continue
-        if s == 'else:' and i + 1 < len(lines):
-            ns = lines[i + 1].strip()
-            if re.match(r'^\w+ = \d{1,4}\s*$', ns):
-                i += 2; continue
-        final.append(line)
+    while time.time() < end:
+        f = SPIN_FRAMES[i % len(SPIN_FRAMES)]
+        try:
+            bot.edit_message_text(f"{f} {text}{suffix}", cid, mid)
+        except: pass
+        time.sleep(0.12)
         i += 1
-    return '\n'.join(final)
 
-def r2_remove_dummy_vars(source: str) -> str:
-    lines = source.split('\n')
-    result = []
-    for line in lines:
-        s = line.strip()
-        m = re.match(r'^(\w+)\s*=\s*(\d{1,4})\s*$', s)
-        if m:
-            varname = m.group(1)
-            occurrences = len(re.findall(r'\b' + re.escape(varname) + r'\b', source))
-            if occurrences <= 2:
-                continue
-        result.append(line)
-    return '\n'.join(result)
+def animate_decode_steps(cid, mid, filename: str, mode_name: str):
+    """Многошаговая анимация декодирования."""
+    face = random.choice(ASTOLFO_FACES)
+    total_steps = 6
+    for step, msg in enumerate(random.sample(DECODE_MSGS, min(total_steps, len(DECODE_MSGS))), 1):
+        bar_done = "█" * step
+        bar_left = "░" * (total_steps - step)
+        pct = int(step / total_steps * 100)
+        text = (
+            f"🔓 {mode_name}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📄 {filename}\n\n"
+            f"{face}\n\n"
+            f"[{bar_done}{bar_left}] {pct}%\n"
+            f"⏳ {msg}..."
+        )
+        try: bot.edit_message_text(text, cid, mid)
+        except: pass
+        time.sleep(0.55)
 
-def r2_simplify_getattr(source: str) -> str:
-    pattern = re.compile(r"getattr\((\w+),\s*'([a-zA-Z_]\w*)'\)")
-    source = pattern.sub(lambda m: f"{m.group(1)}.{m.group(2)}", source)
-    pattern2 = re.compile(r'getattr\((\w+),\s*"([a-zA-Z_]\w*)"\)')
-    source = pattern2.sub(lambda m: f"{m.group(1)}.{m.group(2)}", source)
-    return source
+def show_typing(cid):
+    try: bot.send_chat_action(cid, 'upload_document')
+    except: pass
 
-def r2_simplify_imports(source: str) -> str:
-    pattern = re.compile(r"getattr\(__import__\('(\w+)'\),\s*'([a-zA-Z_]\w*)'\)")
-    return pattern.sub(lambda m: f"__import__('{m.group(1)}').{m.group(2)}", source)
-
-def r2_cleanup(source: str) -> str:
-    source = re.sub(r'\n{4,}', '\n\n\n', source)
-    source = re.sub(r'[ \t]+\n', '\n', source)
-    lines = source.split('\n')
-    result = []
-    skip_until_indent = None
-    for line in lines:
-        s = line.strip()
-        indent = len(line) - len(line.lstrip()) if s else -1
-        if skip_until_indent is not None:
-            if s and indent <= skip_until_indent:
-                skip_until_indent = None
-            else:
-                if s:
-                    continue
-        if s and re.match(r'^(return|raise)\b', s):
-            skip_until_indent = indent
-        result.append(line)
-    return '\n'.join(result)
-
-def rendy2_deobfuscate(source: str, xor_adj: int = 2) -> str:
-    """Ренди 2.0 — Universal Python Deobfuscator. Возвращает деобфусцированный код."""
-    global XOR_ADJ
-    XOR_ADJ = xor_adj
-    wrapper_names = r2_detect_wrapper_names(source)
-    source = r2_extract_layer1(source)
-    source = r2_decode_all_xor_strings(source)
-    source = r2_simplify_wrappers(source, wrapper_names)
-    source = r2_remove_state_machine(source)
-    source = r2_remove_dummy_vars(source)
-    source = r2_simplify_getattr(source)
-    source = r2_simplify_imports(source)
-    source = r2_cleanup(source)
-    return source
-
-# ═══════════════════════════════════════
-#              УТИЛИТЫ UI  🌸
-# ═══════════════════════════════════════
-def fmt_time(s):
-    h = int(s // 3600)
-    m = int((s % 3600) // 60)
-    sc = int(s % 60)
-    if h:
-        return f"{h}ч {m:02d}м {sc:02d}с"
-    if m:
-        return f"{m}м {sc:02d}с"
-    return f"{sc}с"
-
-def ping_bar(ms):
-    if ms is None:   return "⬜⬜⬜⬜⬜  нет данных"
-    if ms < 80:      return "🟩🟩🟩🟩🟩  молниеносно~"
-    if ms < 150:     return "🟩🟩🟩🟩⬜  отлично!"
-    if ms < 250:     return "🟨🟨🟨⬜⬜  хорошо"
-    if ms < 400:     return "🟧🟧⬜⬜⬜  средне"
-    return                  "🟥⬜⬜⬜⬜  медленно..."
-
-def proto_icon(pt):
-    return {"socks5": "🔵", "socks4": "🟣", "http": "⚪", "https": "🔐"}.get(pt, "⚫")
-
-def lbar(n, total=100, w=10):
-    f = min(int(w * n / max(total, 1)), w)
-    return "▰" * f + "▱" * (w - f)
-
-ASTOLFO_ART = (
-    "╔══════════════════════╗\n"
-    "║  🌸 TOGAFF VPN 🌸   ║\n"
-    "║    (\\(\\  ∧＿∧        ║\n"
-    "║   (｡•ω•｡)つ━━✿✿✿    ║\n"
-    "║  Astolfo Edition 💕  ║\n"
-    "╚══════════════════════╝"
+# ══════════════════════════════════════════════════════
+#   ДИЗАЙН — ASCII ART
+# ══════════════════════════════════════════════════════
+LOGO = (
+    "╔══════════════════════════════════╗\n"
+    "║  🔓 TOGAFF DEOBFUSCATOR v4.0   ║\n"
+    "║  (\\.\\  ∧＿∧                    ║\n"
+    "║  (｡•ω•｡)つ━━✿✿✿               ║\n"
+    "║     Astolfo Edition 💕          ║\n"
+    "╚══════════════════════════════════╝"
 )
 
-# ═══════════════════════════════════════
-#     ОТПРАВКА / РЕДАКТИРОВАНИЕ
-# ═══════════════════════════════════════
-def _send(chat_id, text, kb=None):
-    try:
-        return bot.send_message(chat_id, text, reply_markup=kb)
-    except Exception as e:
-        print(f"[send ERR] {e}")
-        return None
+DIVIDER       = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+DIVIDER_THIN  = "──────────────────────────────"
 
-def _edit(chat_id, msg_id, text, kb=None):
-    try:
-        return bot.edit_message_text(text, chat_id, msg_id, reply_markup=kb)
-    except Exception as e:
-        print(f"[edit ERR] {e}")
+METHODS_FULL = (
+    "📦 v1  — base64 / base32 / base16\n"
+    "          zlib · gzip · lzma · bz2\n"
+    "          base64+zlib/gzip/lzma/bz2\n"
+    "          base32+zlib/gzip/lzma\n"
+    "          base16+zlib/gzip/lzma\n"
+    "          Rendy (marshal+gzip+lzma+zlib+b64)\n"
+    "\n"
+    "🔩 v2  — Ренди 2.0 Universal\n"
+    "          XOR строки · State-machine\n"
+    "          Call-wrappers · Dummy vars\n"
+    "          getattr-chains · hex/unicode escapes\n"
+    "          base64-arrays · decimal/chr arrays\n"
+    "          octal · binary strings · zip-xor\n"
+    "\n"
+    "🧬 v3  — rot13 · xor-fixed-key\n"
+    "          plain-base64 · multilayer-base64\n"
+    "          hex-exec · compile+marshal\n"
+    "          chr()-obfuscate · decimal-array\n"
+    "          reverse-string · lambda-chain\n"
+    "          eval-base64 · caesar-cipher\n"
+    "          base85 · base32-plain · bz2 · lzma\n"
+    "          string-split-join · marshal-chain\n"
+    "          integer-encoded · unicode-names\n"
+    "          fake-imports · builtins-hide\n"
+    "          swap-bytes · PyArmor · Hyperion\n"
+    "          OPy · RC4-detect · Vigenere-detect\n"
+    "\n"
+    "🆕 v4  — base62 · base58 · bitwise-NOT\n"
+    "          ROL/ROR · multi-xor · add/sub cipher\n"
+    "          zlib+b64-norev · hex-fromhex\n"
+    "          eval-chain · compressed-marshal\n"
+    "          hash-rename · string-multiply\n"
+    "\n"
+    "📦 EXE — PyInstaller (full) · Nuitka\n"
+    "          Cython · cx_Freeze · py2exe\n"
+    "          zipapp / .pyz · self-extract\n"
+    "          ELF · PE-unknown"
+)
 
-def _updater(chat_id, msg_id):
-    last = [0.0]
-    def upd(text, kb=None, force=False):
-        now = time.time()
-        if not force and now - last[0] < 2.0:
-            return
-        last[0] = now
-        _edit(chat_id, msg_id, text, kb)
-    return upd
+# ══════════════════════════════════════════════════════
+#   СОСТОЯНИЕ ПОЛЬЗОВАТЕЛЕЙ
+# ══════════════════════════════════════════════════════
+# uid → dict
+_state: dict  = {}   # mode, last_file, history, etc.
+_bcast: dict  = {}   # uid → True (ожидает текст рассылки)
+_waiting: dict = {}  # uid → callback для следующего сообщения
 
-# ═══════════════════════════════════════
-#           КЛАВИАТУРЫ  🌸
-# ═══════════════════════════════════════
-def kb_main(connected=False):
-    k = telebot.types.InlineKeyboardMarkup(row_width=2)
-    if connected:
-        k.add(
-            telebot.types.InlineKeyboardButton("🔴 Отключить",   callback_data="disconnect"),
-            telebot.types.InlineKeyboardButton("🔄 Сменить IP",  callback_data="rotate"),
-        )
-        k.add(
-            telebot.types.InlineKeyboardButton("📋 Конфиг",      callback_data="generate"),
-            telebot.types.InlineKeyboardButton("📊 Статус",      callback_data="status"),
-        )
-    else:
-        k.add(telebot.types.InlineKeyboardButton("⚡ Быстрое подключение", callback_data="connect"))
-        k.add(
-            telebot.types.InlineKeyboardButton("📊 Статус",     callback_data="status"),
-            telebot.types.InlineKeyboardButton("🗂 Серверы",    callback_data="proxies"),
-        )
-    k.add(
-        telebot.types.InlineKeyboardButton("🔵 SOCKS5", callback_data="c_socks5"),
-        telebot.types.InlineKeyboardButton("🟣 SOCKS4",  callback_data="c_socks4"),
-        telebot.types.InlineKeyboardButton("⚪ HTTP",    callback_data="c_http"),
-    )
-    k.add(telebot.types.InlineKeyboardButton("🔓 Деобфускатор (АВТО)", callback_data="deobf_menu"))
+def get_state(uid) -> dict:
+    if uid not in _state:
+        _state[uid] = {"mode": None, "history": [], "files_today": 0, "last_day": today()}
+    s = _state[uid]
+    if s.get("last_day") != today():
+        s["files_today"] = 0
+        s["last_day"] = today()
+    return s
+
+def set_mode(uid, mode):
+    get_state(uid)["mode"] = mode
+
+# ══════════════════════════════════════════════════════
+#   КЛАВИАТУРЫ
+# ══════════════════════════════════════════════════════
+def kb_main(is_adm=False):
+    k = types.InlineKeyboardMarkup(row_width=1)
+    k.add(types.InlineKeyboardButton("⚡  АВТО  ─ рекомендуется",         callback_data="mode_auto"))
+    k.add(types.InlineKeyboardButton("🔬  Анализ  ─ без декодирования",   callback_data="mode_detect"))
+    k.add(types.InlineKeyboardButton("" + "─"*30,                         callback_data="noop"))
+    row1 = [
+        types.InlineKeyboardButton("🔓 v1",  callback_data="mode_v1"),
+        types.InlineKeyboardButton("🔩 v2",  callback_data="mode_v2"),
+    ]
+    row2 = [
+        types.InlineKeyboardButton("🧬 v3",  callback_data="mode_v3"),
+        types.InlineKeyboardButton("🆕 v4",  callback_data="mode_v4"),
+    ]
+    k.row(*row1)
+    k.row(*row2)
+    k.add(types.InlineKeyboardButton("" + "─"*30,                         callback_data="noop"))
+    k.add(types.InlineKeyboardButton("📦  EXE/PYD/SO  Extractor",        callback_data="mode_exe"))
+    k.add(types.InlineKeyboardButton("📟  .pyc  Decompiler",              callback_data="mode_pyc"))
+    k.add(types.InlineKeyboardButton("🗜️   .pyz  ZIP Extractor",          callback_data="mode_pyz"))
+    k.add(types.InlineKeyboardButton("" + "─"*30,                         callback_data="noop"))
+    k.add(types.InlineKeyboardButton("📊  Статистика",                    callback_data="show_stats"))
+    k.add(types.InlineKeyboardButton("❓  Методы",                        callback_data="show_methods"))
+    if is_adm:
+        k.add(types.InlineKeyboardButton("👑  Admin Panel",               callback_data="admin_panel"))
     return k
 
-def kb_generate():
-    k = telebot.types.InlineKeyboardMarkup(row_width=1)
-    k.add(telebot.types.InlineKeyboardButton("🔄 Другой прокси", callback_data="regen"))
-    k.add(telebot.types.InlineKeyboardButton("◀ Назад",          callback_data="back_main"))
+def kb_back(prev="main"):
+    k = types.InlineKeyboardMarkup()
+    k.add(types.InlineKeyboardButton("◀  Назад",  callback_data=f"back_{prev}"))
+    return k
+
+def kb_back_mode():
+    k = types.InlineKeyboardMarkup(row_width=2)
+    k.row(
+        types.InlineKeyboardButton("◀  Назад",         callback_data="back_main"),
+        types.InlineKeyboardButton("❌  Отмена",        callback_data="cancel_mode"),
+    )
     return k
 
 def kb_admin():
-    k = telebot.types.InlineKeyboardMarkup(row_width=2)
-    k.add(
-        telebot.types.InlineKeyboardButton("👥 Пользователи",  callback_data="adm_users"),
-        telebot.types.InlineKeyboardButton("🚫 Бан-лист",      callback_data="adm_banned"),
+    k = types.InlineKeyboardMarkup(row_width=2)
+    k.row(
+        types.InlineKeyboardButton("👥 Юзеры",       callback_data="adm_users"),
+        types.InlineKeyboardButton("🚫 Баны",         callback_data="adm_bans"),
     )
-    k.add(
-        telebot.types.InlineKeyboardButton("📊 Статистика",    callback_data="adm_stats"),
-        telebot.types.InlineKeyboardButton("🔄 Обновить базу", callback_data="adm_refresh"),
+    k.row(
+        types.InlineKeyboardButton("📊 Статы",        callback_data="adm_stats"),
+        types.InlineKeyboardButton("📝 Логи",          callback_data="adm_logs"),
     )
-    k.add(
-        telebot.types.InlineKeyboardButton("⚡ Скан серверов", callback_data="adm_scan"),
-        telebot.types.InlineKeyboardButton("📢 Рассылка",      callback_data="adm_broadcast"),
+    k.row(
+        types.InlineKeyboardButton("📢 Рассылка",     callback_data="adm_broadcast"),
+        types.InlineKeyboardButton("🗑️  Очистить логи",callback_data="adm_clearlogs"),
     )
-    k.add(telebot.types.InlineKeyboardButton("◀ Назад",         callback_data="back_main"))
+    k.add(types.InlineKeyboardButton("◀  Назад",      callback_data="back_main"))
     return k
 
-def kb_proxy_list(proxies, page=0):
-    k = telebot.types.InlineKeyboardMarkup(row_width=1)
-    per = 5
-    start = page * per
-    chunk = proxies[start:start + per]
-    for i, p in enumerate(chunk):
-        label = f"{proto_icon(p['type'])} {p['host']}:{p['port']}  {p['ping']}ms"
-        k.add(telebot.types.InlineKeyboardButton(label, callback_data=f"pick_{start + i}"))
-    row = []
-    if page > 0:
-        row.append(telebot.types.InlineKeyboardButton("◀", callback_data=f"pxpage_{page-1}"))
-    if start + per < len(proxies):
-        row.append(telebot.types.InlineKeyboardButton("▶", callback_data=f"pxpage_{page+1}"))
-    if row:
-        k.add(*row)
-    k.add(telebot.types.InlineKeyboardButton("◀ Назад", callback_data="back_main"))
+def kb_after_decode(mode: str):
+    k = types.InlineKeyboardMarkup(row_width=2)
+    k.row(
+        types.InlineKeyboardButton("🔄  Ещё файл",   callback_data=f"mode_{mode}"),
+        types.InlineKeyboardButton("🏠  Меню",        callback_data="back_main"),
+    )
     return k
 
-def kb_deobf():
-    k = telebot.types.InlineKeyboardMarkup(row_width=1)
-    k.add(telebot.types.InlineKeyboardButton("⚡ АВТО (v1 → v2 fallback)",    callback_data="deobf_auto"))
-    k.add(telebot.types.InlineKeyboardButton("🔍 Определить метод",            callback_data="deobf_detect"))
-    k.add(telebot.types.InlineKeyboardButton("🔓 Только v1 (base/zlib/rendy)", callback_data="deobf_run"))
-    k.add(telebot.types.InlineKeyboardButton("🔓 Только v2 (Ренди 2.0)",       callback_data="deobf2_run"))
-    k.add(telebot.types.InlineKeyboardButton("◀ Назад",                        callback_data="back_main"))
+def kb_mode_info(mode: str):
+    k = types.InlineKeyboardMarkup(row_width=1)
+    k.add(types.InlineKeyboardButton(f"✅  Отправить файл  ({mode.upper()})", callback_data=f"mode_{mode}"))
+    k.add(types.InlineKeyboardButton("◀  Назад",  callback_data="back_main"))
     return k
 
-def kb_deobf2():
-    k = telebot.types.InlineKeyboardMarkup(row_width=1)
-    k.add(telebot.types.InlineKeyboardButton("🔓 Деобфусцировать (Ренди 2.0)", callback_data="deobf2_run"))
-    k.add(telebot.types.InlineKeyboardButton("◀ Назад",                         callback_data="back_main"))
-    return k
+# ══════════════════════════════════════════════════════
+#   MODE DESCRIPTIONS
+# ══════════════════════════════════════════════════════
+MODE_INFO = {
+    "auto": {
+        "title":   "⚡  АВТО-деобфускатор",
+        "emoji":   "⚡",
+        "name":    "АВТО",
+        "desc":    "Умный перебор: v1 → v3 → v4 → v2\nАвтоматически определяет метод и декодирует",
+        "formats": "Все поддерживаемые форматы",
+    },
+    "detect": {
+        "title":   "🔬  Режим анализа",
+        "emoji":   "🔬",
+        "name":    "Анализ",
+        "desc":    "Полный анализ без декодирования\nПоказывает метод, признаки и рекомендации",
+        "formats": ".py .pyw",
+    },
+    "v1": {
+        "title":   "🔓  v1  ─ Base Encoding",
+        "emoji":   "🔓",
+        "name":    "v1",
+        "desc":    "base64/32/16 + zlib/gzip/lzma/bz2\nВсе комбинации + Rendy marshal-chain",
+        "formats": ".py .pyw",
+    },
+    "v2": {
+        "title":   "🔩  v2  ─ Ренди 2.0 Universal",
+        "emoji":   "🔩",
+        "name":    "v2",
+        "desc":    "XOR · State-machine · Call-wrappers\nHex/unicode escapes · Dummy vars · getattr\nchr-arrays · octal · binary · zip-xor",
+        "formats": ".py .pyw",
+    },
+    "v3": {
+        "title":   "🧬  v3  ─ Продвинутые методы",
+        "emoji":   "🧬",
+        "name":    "v3",
+        "desc":    "rot13 · xor-key · plain-b64 · multilayer\nhex-exec · chr() · marshal · caesar · base85\nreverse · lambda-chain · unicode-names\nPyArmor · Hyperion · OPy · RC4 · Vigenere",
+        "formats": ".py .pyw .pyc",
+    },
+    "v4": {
+        "title":   "🆕  v4  ─ Расширенные методы",
+        "emoji":   "🆕",
+        "name":    "v4",
+        "desc":    "base62 · base58 · bitwise-NOT · ROL/ROR\nmulti-xor · add/sub cipher · eval-chain\ncompressed-marshal · hex-fromhex · zlib+b64",
+        "formats": ".py .pyw",
+    },
+    "exe": {
+        "title":   "📦  EXE Extractor",
+        "emoji":   "📦",
+        "name":    "EXE",
+        "desc":    "PyInstaller · Nuitka · Cython · cx_Freeze\npy2exe · zipapp · ELF · PE-unknown\nАвтодетект типа + полное извлечение",
+        "formats": ".exe .pyd .so .elf",
+    },
+    "pyc": {
+        "title":   "📟  .pyc Decompiler",
+        "emoji":   "📟",
+        "name":    "PYC",
+        "desc":    "Декомпиляция Python байткода\nuncompyle6 / marshal + dis",
+        "formats": ".pyc",
+    },
+    "pyz": {
+        "title":   "🗜️   .pyz Extractor",
+        "emoji":   "🗜️",
+        "name":    "PYZ",
+        "desc":    "Извлечение из ZIP/PYZ архивов\n+ декомпиляция .pyc внутри",
+        "formats": ".pyz .zip",
+    },
+}
 
-# Состояние деобфускатора по юзеру
-# waiting        = v1 полная деобфускация
-# waiting_detect = v1 только определение
-# waiting_v2     = v2 Ренди 2.0
-_deobf_state = {}
-
-class FMsg:
-    def __init__(self, call, text=""):
-        _cid = call.message.chat.id
-        self.chat = type("C", (), {"id": _cid})()
-        self.message = type("M", (), {"chat": self.chat, "message_id": call.message.message_id})()
-        self.from_user = type("U", (), {
-            "id": call.from_user.id,
-            "first_name": call.from_user.first_name or "User",
-            "username": getattr(call.from_user, "username", None),
-        })()
-        self.text = text
-
-# ═══════════════════════════════════════
-#               /start
-# ═══════════════════════════════════════
+# ══════════════════════════════════════════════════════
+#   /start
+# ══════════════════════════════════════════════════════
 @bot.message_handler(commands=["start"])
 def cmd_start(msg):
-    try:
-        uid  = int(msg.from_user.id)
-        name = msg.from_user.first_name or "анон"
-        print(f"[start] uid={uid} admin={is_admin(uid)} allowed={is_allowed(uid)}")
+    uid   = int(msg.from_user.id)
+    name  = msg.from_user.first_name or "анон"
+    uname = getattr(msg.from_user, "username", "") or ""
 
-        if is_admin(uid):
-            key = str(uid)
-            if key not in allowed_users:
-                allowed_users[key] = {
-                    "username":   getattr(msg.from_user, "username", "") or "",
-                    "first_name": name,
-                    "added":      ts(),
-                    "uses":       0
-                }
-                save_users()
+    if is_banned(uid):
+        _send(msg.chat.id,
+            f"{LOGO}\n\n"
+            f"🚫 Ты в бан-листе.\n\n"
+            f"Обратись к {BOT_TAG} для разбана~")
+        return
 
-        if not is_allowed(uid):
-            bot.send_message(msg.chat.id,
-                f"{ASTOLFO_ART}\n\n"
-                "Привет! Доступ закрыт~\n\n"
-                "Бот работает только по приглашению.\n"
-                "Обратись к администратору")
-            return
-
-        key = str(uid)
-        if key in allowed_users:
-            allowed_users[key]["uses"] = allowed_users[key].get("uses", 0) + 1
-            save_users()
-
-        u     = get_user(uid)
-        total = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
-        fast  = len(cache["top_fast"])
-        conn_line = (f"Подключён — {u['proxy']['host']} ({u['proxy']['type'].upper()})"
-                     if u["connected"] and u["proxy"] else "Не подключён")
-        adm_badge = " [ADMIN]" if is_admin(uid) else ""
-
-        text = (
-            f"{ASTOLFO_ART}\n\n"
-            f"Привет, {name}!{adm_badge}\n\n"
-            f"Togaff VPN - Astolfo Edition\n"
-            f"──────────────────────\n"
-            f"{conn_line}\n\n"
-            f"Прокси в базе: {total}\n"
-            f"Лучших в пуле: {fast}\n\n"
-            f"──────────────────────\n"
-            f"Команды:\n"
-            f"/connect - подключение\n"
-            f"/disconnect - отключиться\n"
-            f"/rotate - сменить IP\n"
-            f"/pick - выбрать прокси\n"
-            f"/scan - найти серверы\n"
-            f"/status - статус\n"
-            f"/ip - мой IP\n"
-            f"/generate - конфиг\n"
-            f"/proxies - список серверов\n"
-            f"/refresh - обновить базу\n"
-            f"/deobf  - авто деобфускатор\n"
-            f"/deobf2 - Ренди 2.0 (universal)\n"
-        )
-        if is_admin(uid):
-            text += "/admin - панель админа\n"
-
-        if os.path.exists(WELCOME_PHOTO):
-            try:
-                with open(WELCOME_PHOTO, "rb") as f:
-                    bot.send_photo(msg.chat.id, f)
-            except Exception as e:
-                print(f"[start] фото: {e}")
-
-        bot.send_message(msg.chat.id, text, reply_markup=kb_main(u["connected"]))
-
-    except Exception as e:
-        import traceback
-        print(f"[start] ОШИБКА: {e}\n{traceback.format_exc()}")
-        try:
-            bot.send_message(msg.chat.id, "Бот работает! Попробуй /start ещё раз")
-        except:
-            pass
-
-# ═══════════════════════════════════════
-#       /deobf — деобфускатор v1
-# ═══════════════════════════════════════
-@bot.message_handler(commands=["deobf"])
-@access_required
-def cmd_deobf(msg):
-    uid = msg.from_user.id
-    _deobf_state[uid] = "waiting_auto"
-    _send(msg.chat.id,
-        "🔓 Авто-деобфускатор 🌸\n\n"
-        "Режим АВТО: сначала пробует v1, если не вышло — автоматически запускает Ренди 2.0\n\n"
-        "Поддерживаемые методы:\n"
-        "v1:\n"
-        "  • base64 / base32 / base16\n"
-        "  • zlib / gzip / lzma\n"
-        "  • base64+zlib / base64+gzip / base64+lzma\n"
-        "  • base32+zlib / base32+gzip / base32+lzma\n"
-        "  • base16+zlib / base16+gzip / base16+lzma\n"
-        "  • Rendy obf (marshal+gzip+lzma+zlib+base64)\n\n"
-        "v2 (Ренди 2.0 fallback):\n"
-        "  • XOR строки + state-machine\n"
-        "  • Call-wrappers + dummy vars\n"
-        "  • getattr chains + cleanup\n\n"
-        "📎 Отправь .py файл:",
-        kb_deobf())
-
-# ═══════════════════════════════════════
-#    /deobf2 — Ренди 2.0 Universal
-# ═══════════════════════════════════════
-@bot.message_handler(commands=["deobf2"])
-@access_required
-def cmd_deobf2(msg):
-    _send(msg.chat.id,
-        "🔓 Деобфускатор v2 — Ренди 2.0\n\n"
-        "Universal Python Deobfuscator\n"
-        "──────────────────────\n"
-        "Снимает слои:\n"
-        "• marshal / gzip / lzma / zlib / base64\n"
-        "• XOR-encoded строки\n"
-        "• State-machine control flow\n"
-        "• Call-wrapper функции\n"
-        "• Dead branches / dummy переменные\n"
-        "• getattr() chains\n\n"
-        "Отправь .py файл для деобфускации:",
-        kb_deobf2())
-
-# ═══════════════════════════════════════
-#   Обработка документов (.py файлов)
-# ═══════════════════════════════════════
-@bot.message_handler(content_types=["document"])
-def handle_document(msg):
-    uid = int(msg.from_user.id)
+    is_new = str(uid) not in users and uid not in users
+    if is_admin(uid) and is_new:
+        users[str(uid)] = {
+            "name": name, "username": uname,
+            "added": ts(), "files": 0, "role": "admin",
+            "methods": {}
+        }
+        save_all()
 
     if not is_allowed(uid):
-        bot.send_message(msg.chat.id, "Доступ закрыт~")
-        return
-
-    state = _deobf_state.get(uid)
-
-    if state not in ("waiting", "waiting_detect", "waiting_v2", "waiting_auto"):
-        bot.send_message(msg.chat.id,
-            "Чтобы деобфусцировать файл — нажми кнопку Деобфускатор или /deobf / /deobf2")
-        return
-
-    doc = msg.document
-    if not doc.file_name.endswith(".py"):
-        bot.send_message(msg.chat.id, "Только .py файлы!")
-        return
-
-    _deobf_state.pop(uid, None)
-    wait = bot.send_message(msg.chat.id, "🔍 Читаю файл...")
-
-    def do():
-        try:
-            file_info  = bot.get_file(doc.file_id)
-            downloaded = bot.download_file(file_info.file_path)
-            code = downloaded.decode("utf-8", errors="replace")
-            lines_in  = code.count('\n') + 1
-            chars_in  = len(code)
-
-            # ══════════════════════════════════════
-            # РЕЖИМ: только определение (v1 detect)
-            # ══════════════════════════════════════
-            if state == "waiting_detect":
-                bot.edit_message_text("🔍 Определяю метод обфускации...", msg.chat.id, wait.message_id)
-                method_v1 = detect_obfuscation(code)
-
-                # Дополнительно проверяем признаки v2
-                has_xor    = bool(re.search(r'bytes\.fromhex', code) and re.search(r'\^\s*\(\d+\s*\^', code))
-                has_sm     = bool(re.search(r'while \w+ != \d+:', code))
-                has_wrap   = bool(re.search(r'def \w+\s*\(\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)\s*:', code))
-                has_exec   = bool(re.search(r'exec\s*\(', code))
-                has_b64bl  = bool(re.search(r"b'[A-Za-z0-9+/=]{200,}'", code))
-
-                lines_det = [
-                    f"🔬 Анализ: {doc.file_name}\n",
-                    f"──────────────────────\n",
-                    f"📄 Строк: {lines_in}  |  Символов: {chars_in:,}\n",
-                    f"──────────────────────\n",
-                ]
-                if method_v1:
-                    lines_det.append(f"✅ v1 метод: {method_v1}\n")
-                    lines_det.append(f"→ Используй /deobf для расшифровки\n")
-                else:
-                    lines_det.append(f"❌ v1 паттерн: не обнаружен\n")
-
-                lines_det.append(f"\n🔎 Признаки v2 (Ренди 2.0):\n")
-                lines_det.append(f"  XOR строки:     {'✅ да' if has_xor else '❌ нет'}\n")
-                lines_det.append(f"  State-machine:  {'✅ да' if has_sm else '❌ нет'}\n")
-                lines_det.append(f"  Call-wrappers:  {'✅ да' if has_wrap else '❌ нет'}\n")
-                lines_det.append(f"  exec() вызовы: {'✅ да' if has_exec else '❌ нет'}\n")
-                lines_det.append(f"  Base64 блоки:   {'✅ да' if has_b64bl else '❌ нет'}\n")
-
-                v2_score = sum([has_xor, has_sm, has_wrap, has_exec, has_b64bl])
-                if v2_score >= 2:
-                    lines_det.append(f"\n🟡 Вероятно нужен v2 (Ренди 2.0)\n")
-                    lines_det.append(f"→ Используй /deobf2\n")
-                elif not method_v1:
-                    lines_det.append(f"\n⚪ Обфускация не распознана\n")
-                    lines_det.append(f"   Файл чист или метод неизвестен\n")
-
-                bot.edit_message_text("".join(lines_det), msg.chat.id, wait.message_id)
-                return
-
-            # ══════════════════════════════════════
-            # РЕЖИМ: Ренди 2.0 (v2 принудительно)
-            # ══════════════════════════════════════
-            if state == "waiting_v2":
-                bot.edit_message_text(
-                    f"🔓 Ренди 2.0 — обрабатываю...\n\n"
-                    f"📄 Файл: {doc.file_name}\n"
-                    f"📊 Строк: {lines_in} | Символов: {chars_in:,}\n\n"
-                    f"⏳ Этапы:\n"
-                    f"  1. Binary payload extraction\n"
-                    f"  2. XOR string decoding\n"
-                    f"  3. Call-wrapper simplification\n"
-                    f"  4. State-machine removal\n"
-                    f"  5. Dummy variable removal\n"
-                    f"  6. getattr() simplification\n"
-                    f"  7. Final cleanup\n",
-                    msg.chat.id, wait.message_id)
-                try:
-                    result = rendy2_deobfuscate(code)
-                    out_name = f"rendy2_{doc.file_name}"
-                    out_path = f"/tmp/{out_name}"
-                    with open(out_path, "w", encoding="utf-8") as f:
-                        f.write(result)
-                    lines_out = result.count('\n') + 1
-                    chars_out = len(result)
-                    reduction_l = round(100 * (1 - lines_out / max(lines_in, 1)))
-                    reduction_c = round(100 * (1 - chars_out / max(chars_in, 1)))
-                    bot.edit_message_text(
-                        f"✅ Ренди 2.0 — готово! 🌸\n\n"
-                        f"📄 Файл: {doc.file_name}\n"
-                        f"──────────────────────\n"
-                        f"📊 Строк:    {lines_in:,} → {lines_out:,}  ({reduction_l}% меньше)\n"
-                        f"💬 Символов: {chars_in:,} → {chars_out:,}  ({reduction_c}% меньше)\n"
-                        f"──────────────────────\n"
-                        f"Метод: Universal (7 слоёв)\n",
-                        msg.chat.id, wait.message_id)
-                    with open(out_path, "rb") as f:
-                        bot.send_document(msg.chat.id, f, visible_file_name=out_name,
-                            caption=(
-                                f"🔓 Ренди 2.0 | {doc.file_name}\n"
-                                f"Строк: {lines_in}→{lines_out} ({reduction_l}%↓) | "
-                                f"Символов: {chars_in:,}→{chars_out:,} ({reduction_c}%↓)"
-                            ))
-                    try:
-                        os.remove(out_path)
-                    except:
-                        pass
-                except Exception as e:
-                    import traceback
-                    tb = traceback.format_exc()
-                    print(f"[deobf v2] ERR:\n{tb}")
-                    bot.edit_message_text(
-                        f"❌ Ошибка Ренди 2.0:\n{e}\n\nФайл: {doc.file_name}",
-                        msg.chat.id, wait.message_id)
-                return
-
-            # ══════════════════════════════════════
-            # РЕЖИМ: АВТО или v1 — пробуем v1,
-            #        если не вышло — авто v2
-            # ══════════════════════════════════════
-            is_auto = (state == "waiting_auto")
-
-            # Шаг 1: определяем v1
-            bot.edit_message_text(
-                f"🔍 {'[АВТО] ' if is_auto else ''}Анализирую {doc.file_name}...\n\n"
-                f"📊 Строк: {lines_in} | Символов: {chars_in:,}\n\n"
-                f"⏳ Шаг 1/2: определяю метод обфускации...",
-                msg.chat.id, wait.message_id)
-
-            method_v1 = detect_obfuscation(code)
-
-            # Шаг 2а: v1 нашёл — декодируем v1
-            if method_v1:
-                bot.edit_message_text(
-                    f"🔍 {'[АВТО] ' if is_auto else ''}Анализирую {doc.file_name}...\n\n"
-                    f"✅ Метод: {method_v1}\n\n"
-                    f"⏳ Шаг 2/2: декодирую...",
-                    msg.chat.id, wait.message_id)
-
-                result, info = deobfuscate_code(code)
-
-                if result:
-                    out_name = f"decoded_{doc.file_name}"
-                    out_path = f"/tmp/{out_name}"
-                    with open(out_path, "w", encoding="utf-8") as f:
-                        f.write(result)
-                    lines_out = result.count('\n') + 1
-                    chars_out = len(result)
-                    reduction_l = round(100 * (1 - lines_out / max(lines_in, 1)))
-                    reduction_c = round(100 * (1 - chars_out / max(chars_in, 1)))
-                    bot.edit_message_text(
-                        f"✅ Декодировано (v1)! 🌸\n\n"
-                        f"📄 Файл: {doc.file_name}\n"
-                        f"──────────────────────\n"
-                        f"🔑 Метод:    {info}\n"
-                        f"📊 Строк:    {lines_in:,} → {lines_out:,}  ({reduction_l}% меньше)\n"
-                        f"💬 Символов: {chars_in:,} → {chars_out:,}  ({reduction_c}% меньше)\n"
-                        f"──────────────────────",
-                        msg.chat.id, wait.message_id)
-                    with open(out_path, "rb") as f:
-                        bot.send_document(msg.chat.id, f, visible_file_name=out_name,
-                            caption=(
-                                f"🔓 v1 | Метод: {info}\n"
-                                f"Строк: {lines_in}→{lines_out} ({reduction_l}%↓)"
-                            ))
-                    try:
-                        os.remove(out_path)
-                    except:
-                        pass
-                    return
-
-                # v1 метод найден, но декодировать не вышло — fallback на v2 если авто
-                if is_auto:
-                    bot.edit_message_text(
-                        f"⚠️ [АВТО] v1 ({method_v1}) не смог декодировать.\n\n"
-                        f"🔄 Переключаюсь на Ренди 2.0...",
-                        msg.chat.id, wait.message_id)
-                else:
-                    bot.edit_message_text(
-                        f"❌ v1 не смог декодировать: {info}\n\n"
-                        f"Попробуй /deobf2 (Ренди 2.0) для этого файла~",
-                        msg.chat.id, wait.message_id)
-                    return
-
-            elif not is_auto:
-                # v1 не нашёл паттерн и не авто-режим
-                bot.edit_message_text(
-                    f"❌ v1: обфускация не распознана\n\n"
-                    f"Файл: {doc.file_name}\n\n"
-                    f"Попробуй /deobf2 (Ренди 2.0) — он умеет больше~",
-                    msg.chat.id, wait.message_id)
-                return
-            else:
-                bot.edit_message_text(
-                    f"🔄 [АВТО] v1 паттерн не найден.\n\n"
-                    f"⏳ Запускаю Ренди 2.0 (universal)...",
-                    msg.chat.id, wait.message_id)
-
-            # ── АВТО-ФОЛЛБЭК: запускаем Ренди 2.0 ──
-            bot.edit_message_text(
-                f"🔓 [АВТО → Ренди 2.0] Обрабатываю...\n\n"
-                f"📄 Файл: {doc.file_name}\n"
-                f"📊 Строк: {lines_in:,} | Символов: {chars_in:,}\n\n"
-                f"⏳ Этапы:\n"
-                f"  1. Binary payload extraction\n"
-                f"  2. XOR string decoding\n"
-                f"  3. Call-wrapper simplification\n"
-                f"  4. State-machine removal\n"
-                f"  5. Dummy variable removal\n"
-                f"  6. getattr() simplification\n"
-                f"  7. Final cleanup\n",
-                msg.chat.id, wait.message_id)
-
-            try:
-                result = rendy2_deobfuscate(code)
-                out_name = f"auto_rendy2_{doc.file_name}"
-                out_path = f"/tmp/{out_name}"
-                with open(out_path, "w", encoding="utf-8") as f:
-                    f.write(result)
-                lines_out = result.count('\n') + 1
-                chars_out = len(result)
-                reduction_l = round(100 * (1 - lines_out / max(lines_in, 1)))
-                reduction_c = round(100 * (1 - chars_out / max(chars_in, 1)))
-                bot.edit_message_text(
-                    f"✅ [АВТО → Ренди 2.0] Готово! 🌸\n\n"
-                    f"📄 Файл: {doc.file_name}\n"
-                    f"──────────────────────\n"
-                    f"🔑 Метод:    v1 не подошёл → Ренди 2.0 (7 слоёв)\n"
-                    f"📊 Строк:    {lines_in:,} → {lines_out:,}  ({reduction_l}% меньше)\n"
-                    f"💬 Символов: {chars_in:,} → {chars_out:,}  ({reduction_c}% меньше)\n"
-                    f"──────────────────────",
-                    msg.chat.id, wait.message_id)
-                with open(out_path, "rb") as f:
-                    bot.send_document(msg.chat.id, f, visible_file_name=out_name,
-                        caption=(
-                            f"🔓 АВТО | Ренди 2.0\n"
-                            f"Строк: {lines_in}→{lines_out} ({reduction_l}%↓) | "
-                            f"Символов: {chars_in:,}→{chars_out:,} ({reduction_c}%↓)"
-                        ))
-                try:
-                    os.remove(out_path)
-                except:
-                    pass
-            except Exception as e:
-                import traceback
-                tb = traceback.format_exc()
-                print(f"[deobf auto-v2] ERR:\n{tb}")
-                bot.edit_message_text(
-                    f"❌ Ренди 2.0 ошибка:\n{e}\n\nФайл: {doc.file_name}",
-                    msg.chat.id, wait.message_id)
-
-        except Exception as e:
-            import traceback
-            print(f"[deobf] ERR: {traceback.format_exc()}")
-            try:
-                bot.edit_message_text(f"Ошибка обработки: {e}", msg.chat.id, wait.message_id)
-            except:
-                pass
-
-    threading.Thread(target=do, daemon=True).start()
-
-# ═══════════════════════════════════════
-#         /pick — ручной выбор прокси
-# ═══════════════════════════════════════
-@bot.message_handler(commands=["pick"])
-@access_required
-def cmd_pick(msg):
-    fast = cache["top_fast"]
-    if not fast:
         _send(msg.chat.id,
-            "⚠️ Пул пуст\n\n"
-            "Сначала запусти /scan чтобы найти серверы~")
+            f"{LOGO}\n\n"
+            f"Привет, {name}! 🌸\n"
+            f"{DIVIDER}\n\n"
+            f"🔒 Доступ по приглашению\n\n"
+            f"Бот работает по вайтлисту~\n"
+            f"Напиши {BOT_TAG} для получения доступа!\n\n"
+            f"✨ Возможности:\n"
+            f"{METHODS_FULL}"
+        )
+        log(f"BLOCKED {uid} @{uname} ({name}) tried to access")
         return
-    _send(msg.chat.id,
-          f"🗂 Выбери прокси из топ-{len(fast)}\n\nОтсортированы по скорости:",
-          kb_proxy_list(fast, page=0))
 
-# ═══════════════════════════════════════
-#              /admin
-# ═══════════════════════════════════════
-def _admin_text():
-    tot    = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
-    online = sum(1 for u in users.values() if u.get("connected"))
-    return (
-        f"👑 Панель администратора\n\n"
-        f"──────────────────────\n"
-        f"👥 Пользователей:   {len(allowed_users)}\n"
-        f"🚫 В бане:          {len(banned_users)}\n"
-        f"🟢 Онлайн сейчас:  {online}\n"
-        f"──────────────────────\n"
-        f"📦 База прокси:    {tot}\n"
-        f"⚡ Смарт-пул:      {len(cache['top_fast'])}\n"
-        f"──────────────────────\n"
-        f"Выбери действие~"
+    if is_new and not is_admin(uid):
+        users[str(uid)] = {
+            "name": name, "username": uname,
+            "added": ts(), "files": 0, "role": "user",
+            "methods": {}
+        }
+        stats["total_users"] = stats.get("total_users", 0) + 1
+        save_all()
+        log(f"NEW USER {uid} @{uname} ({name})")
+    else:
+        # Обновляем имя
+        if str(uid) in users:
+            users[str(uid)]["name"] = name
+            if uname: users[str(uid)]["username"] = uname
+
+    adm_badge = "  👑 ADMIN" if is_admin(uid) else ""
+    user_info = get_user(uid)
+    file_count = user_info.get("files", 0)
+
+    face = random.choice(ASTOLFO_FACES)
+    text = (
+        f"{LOGO}\n\n"
+        f"Привет, {name}!{adm_badge} 🌸\n"
+        f"{DIVIDER}\n"
+        f"{face}\n"
+        f"{DIVIDER}\n\n"
+        f"📁 Файлов декодировано: {file_count}\n\n"
+        f"Выбери режим и отправь файл~ 💕\n\n"
+        f"📌 /help — помощь\n"
+        f"📌 /methods — все методы\n"
+        f"📌 /stats — моя статистика"
+    )
+    if is_admin(uid):
+        text += "\n📌 /admin — панель"
+
+    _send(msg.chat.id, text, kb_main(is_admin(uid)))
+
+# ══════════════════════════════════════════════════════
+#   /help
+# ══════════════════════════════════════════════════════
+@bot.message_handler(commands=["help"])
+def cmd_help(msg):
+    if not is_allowed(msg.from_user.id): return
+    _send(msg.chat.id,
+        f"❓ Помощь — {BOT_NAME} {BOT_VER}\n"
+        f"{DIVIDER}\n\n"
+        f"КАК ИСПОЛЬЗОВАТЬ:\n\n"
+        f"1️⃣ Нажми кнопку с нужным режимом\n"
+        f"2️⃣ Отправь файл боту\n"
+        f"3️⃣ Получи декодированный файл~\n\n"
+        f"{DIVIDER}\n\n"
+        f"РЕЖИМЫ:\n\n"
+        f"⚡ АВТО — лучший выбор, перебирает v1→v3→v4→v2\n"
+        f"🔬 Анализ — только определяет метод без декода\n"
+        f"🔓 v1 — base64/32/16 + компрессия + Rendy\n"
+        f"🔩 v2 — Ренди 2.0 Universal (XOR, state-machine)\n"
+        f"🧬 v3 — rot13, chr(), PyArmor, Hyperion и др.\n"
+        f"🆕 v4 — base62, bitwise-NOT, ROL/ROR и др.\n"
+        f"📦 EXE — PyInstaller/Nuitka/Cython/cx_Freeze\n"
+        f"📟 .pyc — декомпиляция байткода\n"
+        f"🗜️ .pyz — извлечение из ZIP архива\n\n"
+        f"{DIVIDER}\n\n"
+        f"ФОРМАТЫ: .py .pyc .pyw .exe .pyd .so .pyz .zip\n\n"
+        f"/methods — подробный список методов\n"
+        f"/stats — твоя статистика\n"
+        f"/cancel — отменить режим",
+        kb_back()
     )
 
+# ══════════════════════════════════════════════════════
+#   /methods
+# ══════════════════════════════════════════════════════
+@bot.message_handler(commands=["methods"])
+def cmd_methods(msg):
+    if not is_allowed(msg.from_user.id): return
+    _send(msg.chat.id,
+        f"🧬 Все методы деобфускации\n"
+        f"{DIVIDER}\n\n"
+        f"{METHODS_FULL}",
+        kb_back()
+    )
+
+# ══════════════════════════════════════════════════════
+#   /stats
+# ══════════════════════════════════════════════════════
+@bot.message_handler(commands=["stats"])
+def cmd_stats_user(msg):
+    uid = int(msg.from_user.id)
+    if not is_allowed(uid): return
+    u = get_user(uid)
+    file_count = u.get("files", 0)
+    methods_used = u.get("methods", {})
+    top_methods = sorted(methods_used.items(), key=lambda x: -x[1])[:5]
+    top_str = "\n".join(f"  {i+1}. {m}: {n}×" for i, (m, n) in enumerate(top_methods)) or "  нет данных"
+
+    _send(msg.chat.id,
+        f"📊 Твоя статистика\n"
+        f"{DIVIDER}\n\n"
+        f"👤 {u.get('name','?')} (@{u.get('username','?')})\n"
+        f"📅 Дата входа: {u.get('added','?')}\n"
+        f"📁 Файлов всего: {file_count}\n\n"
+        f"Топ методов:\n{top_str}",
+        kb_back()
+    )
+
+# ══════════════════════════════════════════════════════
+#   /cancel
+# ══════════════════════════════════════════════════════
+@bot.message_handler(commands=["cancel"])
+def cmd_cancel(msg):
+    uid = msg.from_user.id
+    if uid in _state: _state[uid]["mode"] = None
+    _bcast.pop(uid, None)
+    _waiting.pop(uid, None)
+    _send(msg.chat.id, "❌ Отменено~", kb_main(is_admin(uid)) if is_allowed(uid) else None)
+
+# ══════════════════════════════════════════════════════
+#   /admin
+# ══════════════════════════════════════════════════════
 @bot.message_handler(commands=["admin"])
 def cmd_admin(msg):
     if not is_admin(msg.from_user.id):
-        _send(msg.chat.id, "🚫 Нет доступа~")
-        return
+        _send(msg.chat.id, "🚫 Нет доступа~"); return
     _send(msg.chat.id, _admin_text(), kb_admin())
 
+def _admin_text():
+    total_files = sum(u.get("files", 0) for u in users.values())
+    today_files = stats.get("daily", {}).get(today(), 0)
+    top_m = sorted(stats.get("methods", {}).items(), key=lambda x: -x[1])[:5]
+    top_str = "  " + " | ".join(f"{m}:{n}" for m, n in top_m) if top_m else "  нет данных"
+    return (
+        f"👑 Admin Panel — {BOT_NAME}\n"
+        f"{DIVIDER}\n\n"
+        f"👥 Пользователей:  {len(users)}\n"
+        f"🚫 В бане:         {len(banned)}\n"
+        f"📁 Файлов всего:   {total_files}\n"
+        f"📅 Сегодня:        {today_files}\n\n"
+        f"Топ методов:\n{top_str}\n"
+        f"{DIVIDER}"
+    )
+
+# ══════════════════════════════════════════════════════
+#   ADMIN COMMANDS
+# ══════════════════════════════════════════════════════
 @bot.message_handler(commands=["add"])
 def cmd_add(msg):
-    if not is_admin(msg.from_user.id):
-        return
-    parts = msg.text.strip().split()
-    if len(parts) < 2:
-        _send(msg.chat.id, "Использование: /add <user_id> [Имя]")
-        return
-    try:
-        target = int(parts[1])
-    except:
-        _send(msg.chat.id, "❌ Неверный ID")
-        return
-    banned_users.discard(target)
-    banned_users.discard(str(target))
-    name = " ".join(parts[2:]) if len(parts) > 2 else f"User {target}"
-    allowed_users[str(target)] = {
-        "username": "", "first_name": name,
-        "added": ts(), "uses": 0, "added_by": msg.from_user.id
+    if not is_admin(msg.from_user.id): return
+    parts = msg.text.strip().split(None, 2)
+    if len(parts) < 2: _send(msg.chat.id, "Использование: /add <user_id> [имя]"); return
+    try: target = int(parts[1])
+    except: _send(msg.chat.id, "❌ Неверный ID"); return
+    banned.discard(target); banned.discard(str(target))
+    name = parts[2] if len(parts) > 2 else f"User {target}"
+    users[str(target)] = {
+        "name": name, "username": "", "added": ts(), "files": 0,
+        "role": "user", "methods": {}, "invited_by": msg.from_user.id
     }
-    save_users()
-    _send(msg.chat.id, f"✅ Добавлен\nID: {target}\nИмя: {name} 🌸")
+    save_all()
+    log(f"ADD {target} ({name}) by {msg.from_user.id}")
+    _send(msg.chat.id, f"✅ Добавлен {name} (ID: {target}) 🌸")
     try:
         bot.send_message(target,
-            "🌸 Привет! Тебя добавили в Togaff VPN!\n\n"
-            "Напиши /start чтобы начать~ 💕")
-    except:
-        pass
+            f"{LOGO}\n\n"
+            f"🌸 Поздравляю!\n\n"
+            f"Тебе открыт доступ к {BOT_NAME} {BOT_VER}!\n\n"
+            f"Нажми /start чтобы начать~ 💕\n\n"
+            f"{DIVIDER}\n"
+            f"by {BOT_TAG}")
+    except: pass
 
-@bot.message_handler(commands=["remove"])
+@bot.message_handler(commands=["remove", "del"])
 def cmd_remove(msg):
-    if not is_admin(msg.from_user.id):
-        return
+    if not is_admin(msg.from_user.id): return
     parts = msg.text.strip().split()
-    if len(parts) < 2:
-        _send(msg.chat.id, "/remove <user_id>")
-        return
-    try:
-        target = int(parts[1])
-    except:
-        _send(msg.chat.id, "❌ Неверный ID")
-        return
+    if len(parts) < 2: _send(msg.chat.id, "/remove <user_id>"); return
+    try: target = int(parts[1])
+    except: return
     key = str(target)
-    if key in allowed_users:
-        del allowed_users[key]
-        save_users()
-        _send(msg.chat.id, f"✅ Удалён {target}")
+    if key in users:
+        name = users[key].get("name", "?")
+        del users[key]; save_all()
+        log(f"REMOVE {target} ({name}) by {msg.from_user.id}")
+        _send(msg.chat.id, f"✅ Удалён {name} ({target})")
     else:
-        _send(msg.chat.id, f"Не найден {target}")
+        _send(msg.chat.id, f"❌ Пользователь {target} не найден")
 
 @bot.message_handler(commands=["ban"])
 def cmd_ban(msg):
-    if not is_admin(msg.from_user.id):
-        return
+    if not is_admin(msg.from_user.id): return
     parts = msg.text.strip().split()
-    if len(parts) < 2:
-        _send(msg.chat.id, "/ban <user_id>")
-        return
-    try:
-        target = int(parts[1])
-    except:
-        _send(msg.chat.id, "❌ Неверный ID")
-        return
-    banned_users.add(target)
-    key = str(target)
-    if key in allowed_users:
-        del allowed_users[key]
-    save_users()
-    _send(msg.chat.id, f"🚫 Забанен {target}")
+    if len(parts) < 2: _send(msg.chat.id, "/ban <user_id>"); return
+    try: target = int(parts[1])
+    except: return
+    if is_admin(target): _send(msg.chat.id, "❌ Нельзя банить администратора"); return
+    banned.add(target); banned.add(str(target))
+    if str(target) in users: del users[str(target)]
+    save_all()
+    log(f"BAN {target} by {msg.from_user.id}")
+    _send(msg.chat.id, f"🚫 Пользователь {target} забанен")
+    try: bot.send_message(target, "🚫 Твой доступ был заблокирован.")
+    except: pass
 
 @bot.message_handler(commands=["unban"])
 def cmd_unban(msg):
-    if not is_admin(msg.from_user.id):
-        return
+    if not is_admin(msg.from_user.id): return
     parts = msg.text.strip().split()
-    if len(parts) < 2:
-        _send(msg.chat.id, "/unban <user_id>")
-        return
-    try:
-        target = int(parts[1])
-    except:
-        _send(msg.chat.id, "❌ Неверный ID")
-        return
-    banned_users.discard(target)
-    banned_users.discard(str(target))
-    save_users()
+    if len(parts) < 2: _send(msg.chat.id, "/unban <user_id>"); return
+    try: target = int(parts[1])
+    except: return
+    banned.discard(target); banned.discard(str(target)); save_all()
+    log(f"UNBAN {target} by {msg.from_user.id}")
     _send(msg.chat.id, f"✅ Разбанен {target} 🌸")
 
 @bot.message_handler(commands=["users"])
 def cmd_users(msg):
-    if not is_admin(msg.from_user.id):
-        return
-    _send_users_list(msg.chat.id)
+    if not is_admin(msg.from_user.id): return
+    if not users: _send(msg.chat.id, "Пользователей нет~"); return
+    lines = [f"👥 Пользователи ({len(users)})\n{DIVIDER}\n\n"]
+    for i, (uid_s, u) in enumerate(list(users.items())[:40], 1):
+        uname = f"@{u['username']}" if u.get('username') else f"ID:{uid_s}"
+        role = " 👑" if u.get("role") == "admin" else ""
+        lines.append(f"{i}. {u.get('name','?')}{role} {uname}\n"
+                     f"   📁 {u.get('files',0)} файлов · {u.get('added','?')}\n\n")
+    if len(users) > 40: lines.append(f"...и ещё {len(users)-40}")
+    _send(msg.chat.id, "".join(lines))
 
-def _send_users_list(chat_id, msg_id=None):
-    if not allowed_users:
-        text = "👥 Пользователи\n\nСписок пуст~"
+@bot.message_handler(commands=["broadcast"])
+def cmd_broadcast_start(msg):
+    if not is_admin(msg.from_user.id): return
+    _bcast[msg.from_user.id] = True
+    _send(msg.chat.id, "📢 Отправь текст рассылки~ (/cancel для отмены)")
+
+@bot.message_handler(commands=["info"])
+def cmd_info(msg):
+    if not is_admin(msg.from_user.id): return
+    parts = msg.text.strip().split()
+    if len(parts) < 2: _send(msg.chat.id, "/info <user_id>"); return
+    try: target = str(int(parts[1]))
+    except: return
+    if target in users:
+        u = users[target]
+        text = (
+            f"👤 Пользователь {target}\n"
+            f"{DIVIDER}\n\n"
+            f"Имя: {u.get('name','?')}\n"
+            f"Username: @{u.get('username','?')}\n"
+            f"Роль: {u.get('role','user')}\n"
+            f"Файлов: {u.get('files',0)}\n"
+            f"Добавлен: {u.get('added','?')}\n"
+            f"Пригласил: {u.get('invited_by','?')}\n\n"
+            f"Методы:\n" +
+            "\n".join(f"  {m}: {n}×" for m, n in u.get('methods', {}).items()) or "  нет"
+        )
+        _send(msg.chat.id, text)
     else:
-        lines = [f"👥 Пользователи ({len(allowed_users)})\n\n"]
-        for i, (uid_s, info) in enumerate(list(allowed_users.items())[:30], 1):
-            uname = info.get("username", "") or ""
-            name  = info.get("first_name", "—")
-            added = info.get("added", "—")
-            uses  = info.get("uses", 0)
-            try:
-                online = "🟢" if users.get(int(uid_s), {}).get("connected") else "⚪"
-            except:
-                online = "⚪"
-            ustr = f"@{uname}" if uname else f"ID:{uid_s}"
-            lines.append(f"{online} {i}. {name} {ustr}\n   Добавлен: {added} · Сессий: {uses}\n\n")
-        if len(allowed_users) > 30:
-            lines.append(f"...и ещё {len(allowed_users)-30}")
-        text = "".join(lines)
-    k = telebot.types.InlineKeyboardMarkup()
-    k.add(telebot.types.InlineKeyboardButton("◀ Назад", callback_data="adm_panel"))
-    if msg_id:
-        try:
-            bot.edit_message_text(text, chat_id, msg_id, reply_markup=k)
-            return
-        except:
-            pass
-    _send(chat_id, text, k)
+        _send(msg.chat.id, f"Пользователь {target} не найден")
 
-_broadcast_state = {}
-
-# ═══════════════════════════════════════
-#               /scan
-# ═══════════════════════════════════════
-@bot.message_handler(commands=["scan"])
-@access_required
-def cmd_scan(msg):
-    wait = _send(msg.chat.id, "🔍 Сканирую серверы...\n\nЭтап 1/2: TCP-пинг\n" + lbar(0) + "  0/0")
-    if not wait:
-        return
-    cid = msg.chat.id
-    mid = wait.message_id
-    upd = _updater(cid, mid)
-
-    def tcp_cb(done, total):
-        upd(f"🔍 Сканирую серверы...\n\nЭтап 1/2: TCP-пинг\n{lbar(done,total)}  {done}/{total} хостов")
-
-    def http_cb(done, total):
-        upd(f"🔍 Сканирую серверы...\n\nЭтап 2/2: Проверка IP\n{lbar(done,total)}  {done}/{total} живых серверов")
-
-    def do():
-        my_ip = get_my_ip() or ""
-        results = build_smart_pool(my_ip, sample=SCAN_SAMPLE, tcp_cb=tcp_cb, http_cb=http_cb)
-        if not results:
-            _edit(cid, mid,
-                "❌ Серверы не найдены\n\n"
-                "Попробуй /refresh и повтори /scan~")
-            return
-        lines = [f"⚡ Смарт-пул готов — {len(results)} серверов 🌸\n\n"]
-        for i, r in enumerate(results[:7], 1):
-            lines.append(
-                f"{i}. {proto_icon(r['type'])} {r['host']}:{r['port']}\n"
-                f"   {ping_bar(r['ping'])}  {r['ping']} ms\n\n"
-            )
-        lines.append("Используются автоматически при /connect\nДля ручного выбора: /pick")
-        _edit(cid, mid, "".join(lines), kb_main(get_user(msg.from_user.id)["connected"]))
-
-    threading.Thread(target=do, daemon=True).start()
-
-# ═══════════════════════════════════════
-#             /connect
-# ═══════════════════════════════════════
-@bot.message_handler(commands=["connect"])
-@access_required
-def cmd_connect(msg):
-    uid   = int(msg.from_user.id)
-    u     = get_user(uid)
-    parts = (msg.text or "").strip().split()
-    raw   = parts[1].lower() if len(parts) > 1 else None
-    aliases = {"s5": "socks5", "socks5": "socks5", "s4": "socks4",
-                "socks4": "socks4", "http": "http", "https": "http"}
-    pf = aliases.get(raw) if raw else None
-
-    if u["connected"]:
-        px = u["proxy"]
-        _send(msg.chat.id,
-            f"✅ Уже подключён~\n\n"
-            f"{proto_icon(px['type'])} {px['host']}:{px['port']}\n\n"
-            f"• /rotate — сменить IP\n• /disconnect — отключиться",
-            kb_main(True))
-        return
-
-    wait = _send(msg.chat.id, "🔍 Определяю твой IP...")
-    if not wait:
-        return
-    cid = msg.chat.id
-    mid = wait.message_id
-    upd = _updater(cid, mid)
-
-    def do():
-        my_ip = get_my_ip() or "unknown"
-        u["ip_before"] = my_ip
-        label   = pf.upper() if pf else "АВТО"
-        fast_n  = len([p for p in cache["top_fast"] if not pf or p["type"] == pf])
-
-        if fast_n:
-            upd(f"🔄 Подключаюсь [{label}]\n\nТвой IP: {my_ip}\n⚡ Проверяю {fast_n} быстрых серверов...")
-        else:
-            upd(f"🔄 Подключаюсь [{label}]\n\nТвой IP: {my_ip}\n🔍 Полный поиск...")
-
-        n_info = {"n": 0}
-
-        def on_try(n, pt, h, p):
-            n_info["n"] = n
-            upd(f"🔄 Подключаюсь [{label}]\n\nТвой IP: {my_ip}\n"
-                f"{proto_icon(pt)} Тест: {h}:{p}\n"
-                f"{lbar(min(n,200),200)}  попытка {n}")
-
-        res = find_best_proxy(my_ip, ptype_filter=pf, on_try=on_try)
-
-        if res:
-            u.update(connected=True, proxy=res, connect_time=time.time(), ip_after=res["new_ip"])
-            u["sessions"] = u.get("sessions", 0) + 1
-            smart_pool_refresh_bg(my_ip)
-            _edit(cid, mid,
-                f"✅ Подключение установлено! 🌸\n\n"
-                f"──────────────────────\n"
-                f"{proto_icon(res['type'])} Протокол:  {res['type'].upper()}\n"
-                f"🖥 Сервер:    {res['host']}:{res['port']}\n"
-                f"──────────────────────\n"
-                f"📶 Качество:\n"
-                f"   {ping_bar(res['ping'])}  {res['ping']} ms\n"
-                f"──────────────────────\n"
-                f"📍 IP до:      {my_ip}\n"
-                f"🌍 IP сейчас:  {res['new_ip']}\n"
-                f"──────────────────────\n"
-                f"🔒 Защита активна~ 💕",
-                kb_main(True))
-        else:
-            _edit(cid, mid,
-                f"❌ Сервер не найден\n\n"
-                f"Проверено: {n_info['n']} серверов\n\n"
-                f"Попробуй:\n"
-                f"• /scan  — найти быстрые серверы\n"
-                f"• /refresh — обновить базу\n"
-                f"• /connect http — только HTTP",
-                kb_main(False))
-
-    threading.Thread(target=do, daemon=True).start()
-
-# ═══════════════════════════════════════
-#           /disconnect
-# ═══════════════════════════════════════
-@bot.message_handler(commands=["disconnect"])
-@access_required
-def cmd_disconnect(msg):
-    u = get_user(msg.from_user.id)
-    if not u["connected"]:
-        _send(msg.chat.id, "ℹ️ VPN не подключён~", kb_main(False))
-        return
-    sess = fmt_time(time.time() - u["connect_time"]) if u["connect_time"] else "—"
-    px   = u["proxy"]
-    ib   = u.get("ip_before", "—")
-    ia   = u.get("ip_after", "—")
-    u.update(connected=False, proxy=None, connect_time=None)
-    _send(msg.chat.id,
-        f"🔴 Сессия завершена\n\n"
-        f"──────────────────────\n"
-        f"{proto_icon(px['type'])} {px['host']}:{px['port']}\n"
-        f"⏱ Длительность:  {sess}\n"
-        f"──────────────────────\n"
-        f"📍 Реальный IP:  {ib}\n"
-        f"🌍 Был IP VPN:   {ia}\n"
-        f"──────────────────────\n"
-        f"Пока~ 🌸",
-        kb_main(False))
-
-# ═══════════════════════════════════════
-#             /rotate
-# ═══════════════════════════════════════
-@bot.message_handler(commands=["rotate"])
-@access_required
-def cmd_rotate(msg):
-    u = get_user(msg.from_user.id)
-    if not u["connected"]:
-        _send(msg.chat.id, "ℹ️ Сначала /connect~")
-        return
-    wait = _send(msg.chat.id, "🔄 Меняю IP...")
-    if not wait:
-        return
-    cid = msg.chat.id
-    mid = wait.message_id
-    upd = _updater(cid, mid)
-
-    def do():
-        my_ip  = u.get("ip_before") or get_my_ip() or "unknown"
-        excl   = u["proxy"]["host"] if u["proxy"] else None
-        old_ip = u.get("ip_after", "—")
-        n_info = {"n": 0}
-
-        def on_try(n, pt, h, p):
-            n_info["n"] = n
-            upd(f"🔄 Меняю IP...\n\n{proto_icon(pt)} {h}:{p}\n{lbar(min(n,200),200)}  попытка {n}")
-
-        res = find_best_proxy(my_ip, exclude=excl, on_try=on_try)
-        if res:
-            u.update(proxy=res, connect_time=time.time(), ip_after=res["new_ip"])
-            u["total_rotates"] = u.get("total_rotates", 0) + 1
-            _edit(cid, mid,
-                f"✅ IP изменён! 🌸\n\n"
-                f"──────────────────────\n"
-                f"{proto_icon(res['type'])} {res['host']}:{res['port']}\n"
-                f"──────────────────────\n"
-                f"📶 {ping_bar(res['ping'])}  {res['ping']} ms\n"
-                f"──────────────────────\n"
-                f"🌍 Был:     {old_ip}\n"
-                f"🌍 Новый:   {res['new_ip']}",
-                kb_main(True))
-        else:
-            _edit(cid, mid, "❌ Нет доступных серверов\n\nПопробуй /scan~", kb_main(True))
-
-    threading.Thread(target=do, daemon=True).start()
-
-# ═══════════════════════════════════════
-#              /status
-# ═══════════════════════════════════════
-@bot.message_handler(commands=["status"])
-@access_required
-def cmd_status(msg):
-    u    = get_user(msg.from_user.id)
-    tot  = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
-    fast = len(cache["top_fast"])
-
-    if u["connected"] and u["proxy"]:
-        px   = u["proxy"]
-        sess = fmt_time(time.time() - u["connect_time"]) if u["connect_time"] else "—"
-        wait = _send(msg.chat.id, "📊 Получаю статус...")
-        if not wait:
-            return
-
-        def do():
-            ms   = tcp_ping(px["host"], px["port"], timeout=2.5)
-            anon = ("Высокая (SOCKS5)" if px["type"] == "socks5"
-                    else "Средняя (SOCKS4)" if px["type"] == "socks4"
-                    else "Базовая (HTTP)")
-            ping_str = f"{ms} ms" if ms else "сервер недоступен"
-            _edit(msg.chat.id, wait.message_id,
-                f"📊 Статус VPN 🌸\n\n"
-                f"──────────────────────\n"
-                f"🟢 Статус:     АКТИВЕН\n"
-                f"{proto_icon(px['type'])} Протокол:  {px['type'].upper()}\n"
-                f"🖥 Сервер:     {px['host']}:{px['port']}\n"
-                f"──────────────────────\n"
-                f"📶 Качество:\n"
-                f"   {ping_bar(ms)}  {ping_str}\n"
-                f"──────────────────────\n"
-                f"⏱ Сессия:      {sess}\n"
-                f"🔄 Смен IP:    {u.get('total_rotates',0)}\n"
-                f"📍 IP до VPN:  {u.get('ip_before','—')}\n"
-                f"🌍 IP сейчас:  {u.get('ip_after','—')}\n"
-                f"──────────────────────\n"
-                f"🔐 Анонимность: {anon}\n"
-                f"🔒 Защита:     активна~\n"
-                f"──────────────────────\n"
-                f"📦 База:       {tot} прокси\n"
-                f"⚡ Пул:        {fast} быстрых",
-                kb_main(True))
-
-        threading.Thread(target=do, daemon=True).start()
-    else:
-        _send(msg.chat.id,
-            f"📊 Статус VPN\n\n"
-            f"──────────────────────\n"
-            f"🔴 Статус:  НЕ ПОДКЛЮЧЁН\n"
-            f"──────────────────────\n"
-            f"📦 База прокси:\n"
-            f"   🔵 SOCKS5: {len(cache['socks5'])}\n"
-            f"   🟣 SOCKS4: {len(cache['socks4'])}\n"
-            f"   ⚪ HTTP:   {len(cache['http'])}\n"
-            f"   Итого:    {tot}\n"
-            f"──────────────────────\n"
-            f"⚡ Смарт-пул:  {fast} серверов\n\n"
-            f"/connect — подключиться\n"
-            f"/scan — найти лучшие серверы~",
-            kb_main(False))
-
-# ═══════════════════════════════════════
-#             /proxies
-# ═══════════════════════════════════════
-@bot.message_handler(commands=["proxies"])
-@access_required
-def cmd_proxies(msg):
-    tot  = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
-    fast = cache["top_fast"]
-    if tot == 0:
-        _send(msg.chat.id, "📦 База пуста\n\nИспользуй /refresh~")
-        return
-
-    lines = ["🗂 Серверы Togaff VPN 🌸\n\n"]
-    if fast:
-        lines.append(f"⚡ Быстрые серверы (топ {min(3,len(fast))}):\n\n")
-        for r in fast[:3]:
-            lines.append(f"  {proto_icon(r['type'])} {r['host']}:{r['port']}\n"
-                         f"  {ping_bar(r['ping'])}  {r['ping']} ms\n\n")
-        lines.append("──────────────────────\n")
-
-    for pt in ["socks5", "socks4", "http"]:
-        lines.append(f"{proto_icon(pt)} {pt.upper()} — {len(cache[pt])} серверов\n")
-        for h, p in cache[pt][:3]:
-            lines.append(f"   {h}:{p}\n")
-        lines.append("\n")
-    lines.append(f"Всего: {tot}  ·  /refresh для обновления\n/pick для ручного выбора~")
-
-    _send(msg.chat.id, "".join(lines), kb_main(get_user(msg.from_user.id)["connected"]))
-
-# ═══════════════════════════════════════
-#               /ip
-# ═══════════════════════════════════════
-@bot.message_handler(commands=["ip"])
-@access_required
-def cmd_ip(msg):
-    u    = get_user(msg.from_user.id)
-    wait = _send(msg.chat.id, "🔍 Определяю IP...")
-    if not wait:
-        return
-
-    def do():
-        if u["connected"] and u["proxy"]:
-            px   = u["proxy"]
-            ip   = get_ip_via(px["type"], px["host"], px["port"], timeout=9)
-            mode = f"{px['type'].upper()} прокси"
-            icon = "🌍"
-        else:
-            ip   = get_my_ip(timeout=7)
-            mode = "прямое соединение"
-            icon = "📍"
-        _edit(msg.chat.id, wait.message_id,
-            f"{icon} Твой IP-адрес 🌸\n\n"
-            f"──────────────────────\n"
-            f"IP:    {ip or 'недоступен'}\n"
-            f"Режим: {mode}\n"
-            f"──────────────────────")
-
-    threading.Thread(target=do, daemon=True).start()
-
-# ═══════════════════════════════════════
-#            /refresh
-# ═══════════════════════════════════════
-@bot.message_handler(commands=["refresh"])
-@access_required
-def cmd_refresh(msg):
-    wait = _send(msg.chat.id, "🔄 Обновляю базу прокси...")
-    if not wait:
-        return
-
-    def do():
-        cache["updated"] = 0
-        refresh_cache(force=True)
-        tot = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
-        _edit(msg.chat.id, wait.message_id,
-            f"✅ База обновлена! 🌸\n\n"
-            f"──────────────────────\n"
-            f"🔵 SOCKS5: {len(cache['socks5'])}\n"
-            f"🟣 SOCKS4: {len(cache['socks4'])}\n"
-            f"⚪ HTTP:   {len(cache['http'])}\n"
-            f"──────────────────────\n"
-            f"📦 Итого:  {tot}\n\n"
-            f"/scan — найти лучшие серверы~",
-            kb_main(get_user(msg.from_user.id)["connected"]))
-
-    threading.Thread(target=do, daemon=True).start()
-
-# ═══════════════════════════════════════
-#            /generate
-# ═══════════════════════════════════════
-@bot.message_handler(commands=["generate"])
-@access_required
-def cmd_generate(msg):
-    u = get_user(msg.from_user.id)
-    if u["connected"] and u["proxy"]:
-        _send_config(msg.chat.id, None, u["proxy"])
-        return
-    wait = _send(msg.chat.id, "🔧 Генерирую конфиг...")
-    if not wait:
-        return
-    cid = msg.chat.id
-    mid = wait.message_id
-    upd = _updater(cid, mid)
-
-    def do():
-        my_ip  = get_my_ip() or "0.0.0.0"
-        n_info = {"n": 0}
-
-        def on_try(n, pt, h, p):
-            n_info["n"] = n
-            upd(f"🔧 Генератор конфигов\n\n{proto_icon(pt)} {h}:{p}\n{lbar(min(n,60),60)}  попытка {n}")
-
-        res = find_best_proxy(my_ip, on_try=on_try)
-        if res:
-            _send_config(cid, mid, res)
-        else:
-            _edit(cid, mid, "❌ Нет рабочего прокси\n\nПопробуй /scan~")
-
-    threading.Thread(target=do, daemon=True).start()
-
-def _send_config(chat_id, msg_id, proxy):
-    h, p, pt = proxy["host"], proxy["port"], proxy["type"]
-    ms = proxy["ping"]
-    pu = _proxy_url(pt, h, p)
-    text = (
-        f"📋 Конфиг прокси 🌸\n\n"
-        f"──────────────────────\n"
-        f"{proto_icon(pt)} {h}:{p}  ·  {pt.upper()}\n"
-        f"📶 {ping_bar(ms)}  {ms} ms\n"
-        f"──────────────────────\n\n"
-        f"curl / wget:\n--proxy {pu}\n\n"
-        f"Shell (ENV):\nexport ALL_PROXY={pu}\n\n"
-        f"proxychains.conf:\n{pt} {h} {p}\n\n"
-        f"Python requests:\nproxies={{'http':'{pu}','https':'{pu}'}}\n\n"
-        f"RAW:\n{h}:{p}"
-    )
-    if msg_id:
-        try:
-            bot.edit_message_text(text, chat_id, msg_id, reply_markup=kb_generate())
-            return
-        except:
-            pass
-    _send(chat_id, text, kb_generate())
-
-# ═══════════════════════════════════════
-#            CALLBACKS
-# ═══════════════════════════════════════
-@bot.callback_query_handler(func=lambda c: True)
-def on_callback(call):
-    uid = int(call.from_user.id)
-    d   = call.data
-    cid = call.message.chat.id
-    mid = call.message.message_id
-
-    # ─ Деобфускатор (меню) ──────────────
-    if d == "deobf_menu":
-        if not is_allowed(uid):
-            bot.answer_callback_query(call.id, "🔒")
-            return
-        bot.answer_callback_query(call.id)
-        try:
-            bot.edit_message_text(
-                "🔓 Деобфускатор 🌸\n\n"
-                "⚡ АВТО — пробует v1, при неудаче сразу v2\n\n"
-                "v1 методы:\n"
-                "  • base64/32/16 · zlib · gzip · lzma\n"
-                "  • Комбо: base+zlib/gzip/lzma\n"
-                "  • Rendy obf (marshal+gzip+lzma+zlib+base64)\n\n"
-                "v2 (Ренди 2.0):\n"
-                "  • XOR строки · State-machine\n"
-                "  • Call-wrappers · Dummy vars\n"
-                "  • getattr chains · Binary payload\n\n"
-                "Выбери режим:",
-                cid, mid, reply_markup=kb_deobf())
-        except:
-            _send(cid, "🔓 Деобфускатор", kb_deobf())
-        return
-
-    if d == "deobf_auto":
-        if not is_allowed(uid):
-            bot.answer_callback_query(call.id, "🔒")
-            return
-        bot.answer_callback_query(call.id)
-        _deobf_state[uid] = "waiting_auto"
-        _edit(cid, mid,
-            "⚡ АВТО-деобфускатор активирован 🌸\n\n"
-            "Порядок: v1 (base/zlib/rendy) → если не вышло → Ренди 2.0\n\n"
-            "📎 Отправь .py файл:")
-        return
-
-    if d == "deobf_detect":
-        if not is_allowed(uid):
-            bot.answer_callback_query(call.id, "🔒")
-            return
-        bot.answer_callback_query(call.id)
-        _deobf_state[uid] = "waiting_detect"
-        _edit(cid, mid,
-            "🔍 Отправь .py файл и я определю тип обфускации~\n\n"
-            "(/cancel для отмены)")
-        return
-
-    if d == "deobf_run":
-        if not is_allowed(uid):
-            bot.answer_callback_query(call.id, "🔒")
-            return
-        bot.answer_callback_query(call.id)
-        _deobf_state[uid] = "waiting"
-        _edit(cid, mid,
-            "📎 Отправь .py файл для деобфускации (v1)~\n\n"
-            "(/cancel для отмены)")
-        return
-
-    # ─ Деобфускатор v2 (Ренди 2.0) ──────
-    if d == "deobf2_menu":
-        if not is_allowed(uid):
-            bot.answer_callback_query(call.id, "🔒")
-            return
-        bot.answer_callback_query(call.id)
-        try:
-            bot.edit_message_text(
-                "🔓 Деобфускатор v2 — Ренди 2.0 🌸\n\n"
-                "Universal Python Deobfuscator\n"
-                "──────────────────────\n"
-                "• marshal / gzip / lzma / zlib / base64\n"
-                "• XOR-encoded строки\n"
-                "• State-machine control flow\n"
-                "• Call-wrapper функции\n"
-                "• Dead branches / dummy переменные\n"
-                "• getattr() chains\n\n"
-                "Отправь .py файл:",
-                cid, mid, reply_markup=kb_deobf2())
-        except:
-            _send(cid, "🔓 Ренди 2.0", kb_deobf2())
-        return
-
-    if d == "deobf2_run":
-        if not is_allowed(uid):
-            bot.answer_callback_query(call.id, "🔒")
-            return
-        bot.answer_callback_query(call.id)
-        _deobf_state[uid] = "waiting_v2"
-        _edit(cid, mid,
-            "📎 Отправь .py файл для Ренди 2.0~\n\n"
-            "(/cancel для отмены)")
-        return
-
-    # ─ Ручной выбор прокси ──────────────
-    if d.startswith("pick_"):
-        if not is_allowed(uid):
-            bot.answer_callback_query(call.id, "🔒")
-            return
-        idx  = int(d.split("_")[1])
-        fast = cache["top_fast"]
-        if idx >= len(fast):
-            bot.answer_callback_query(call.id, "⚠️ Устаревший список")
-            return
-        px = fast[idx]
-        bot.answer_callback_query(call.id, "⚡ Подключаюсь...")
-        u = get_user(uid)
-        old_ip = u.get("ip_after") if u["connected"] else None
-        wait = _send(cid,
-            f"🔄 Подключаюсь к выбранному серверу...\n\n"
-            f"{proto_icon(px['type'])} {px['host']}:{px['port']}")
-        if not wait:
-            return
-
-        def do():
-            my_ip = get_my_ip() or "unknown"
-            if not old_ip:
-                u["ip_before"] = my_ip
-            res = verify_proxy(px["type"], px["host"], px["port"], my_ip, tcp_t=2, ip_t=9)
-            if res:
-                u.update(connected=True, proxy=res, connect_time=time.time(), ip_after=res["new_ip"])
-                u["sessions"] = u.get("sessions", 0) + 1
-                _edit(cid, wait.message_id,
-                    f"✅ Подключён! 🌸\n\n"
-                    f"──────────────────────\n"
-                    f"{proto_icon(res['type'])} {res['host']}:{res['port']}\n"
-                    f"──────────────────────\n"
-                    f"📶 {ping_bar(res['ping'])}  {res['ping']} ms\n"
-                    f"──────────────────────\n"
-                    f"📍 IP до:     {my_ip}\n"
-                    f"🌍 IP сейчас: {res['new_ip']} 💕",
-                    kb_main(True))
-            else:
-                _edit(cid, wait.message_id,
-                    f"❌ Сервер недоступен\n\n{px['host']}:{px['port']}\n\nВыбери другой~",
-                    kb_proxy_list(fast, 0))
-
-        threading.Thread(target=do, daemon=True).start()
-        return
-
-    if d.startswith("pxpage_"):
-        if not is_allowed(uid):
-            bot.answer_callback_query(call.id, "🔒")
-            return
-        page = int(d.split("_")[1])
-        fast = cache["top_fast"]
-        bot.answer_callback_query(call.id)
-        try:
-            bot.edit_message_reply_markup(cid, mid, reply_markup=kb_proxy_list(fast, page))
-        except:
-            pass
-        return
-
-    if d == "back_main":
-        bot.answer_callback_query(call.id)
-        cmd_start(FMsg(call, "/start"))
-        return
-
-    if d == "adm_panel":
-        if not is_admin(uid):
-            bot.answer_callback_query(call.id, "🚫")
-            return
-        bot.answer_callback_query(call.id)
-        try:
-            bot.edit_message_text(_admin_text(), cid, mid, reply_markup=kb_admin())
-        except:
-            _send(cid, _admin_text(), kb_admin())
-        return
-
-    # ─ Кнопки админа ────────────────────
-    if d.startswith("adm_") or d.startswith("ban_") or d.startswith("del_"):
-        if not is_admin(uid):
-            bot.answer_callback_query(call.id, "🚫")
-            return
-        if d == "adm_users":
-            bot.answer_callback_query(call.id)
-            _send_users_list(cid, mid)
-        elif d == "adm_banned":
-            bot.answer_callback_query(call.id)
-            text = (f"🚫 Бан-лист ({len(banned_users)})\n\n" +
-                    "\n".join(f"• {u}" for u in list(banned_users)[:30])
-                    if banned_users else "🚫 Бан-лист\n\nПуст~")
-            k = telebot.types.InlineKeyboardMarkup()
-            k.add(telebot.types.InlineKeyboardButton("◀ Назад", callback_data="adm_panel"))
-            try:
-                bot.edit_message_text(text, cid, mid, reply_markup=k)
-            except:
-                _send(cid, text, k)
-        elif d == "adm_stats":
-            bot.answer_callback_query(call.id)
-            online = sum(1 for u in users.values() if u.get("connected"))
-            tot    = sum(len(cache[t]) for t in ["socks5", "socks4", "http"])
-            text   = (f"📊 Статистика 🌸\n\n"
-                      f"👥 Пользователей: {len(allowed_users)}\n"
-                      f"🟢 Онлайн: {online}\n"
-                      f"🚫 В бане: {len(banned_users)}\n\n"
-                      f"📦 База: {tot}\n"
-                      f"⚡ Пул: {len(cache['top_fast'])}\n"
-                      f"🔵 SOCKS5: {len(cache['socks5'])}\n"
-                      f"🟣 SOCKS4: {len(cache['socks4'])}\n"
-                      f"⚪ HTTP: {len(cache['http'])}\n\n"
-                      f"Обновлено: {ts()}")
-            k = telebot.types.InlineKeyboardMarkup()
-            k.add(telebot.types.InlineKeyboardButton("◀ Назад", callback_data="adm_panel"))
-            try:
-                bot.edit_message_text(text, cid, mid, reply_markup=k)
-            except:
-                _send(cid, text, k)
-        elif d == "adm_refresh":
-            bot.answer_callback_query(call.id, "🔄 Запущено...")
-            def bg():
-                cache["updated"] = 0
-                refresh_cache(force=True)
-            threading.Thread(target=bg, daemon=True).start()
-            _send(cid, "🔄 Обновление базы запущено в фоне~")
-        elif d == "adm_scan":
-            bot.answer_callback_query(call.id, "⚡ Запускаю...")
-            cmd_scan(FMsg(call, "/scan"))
-        elif d == "adm_broadcast":
-            bot.answer_callback_query(call.id)
-            _broadcast_state[uid] = True
-            _send(cid, "📢 Отправь текст рассылки следующим сообщением\n(/cancel для отмены)")
-        elif d.startswith("ban_"):
-            t = int(d.split("_")[1])
-            banned_users.add(t)
-            k = str(t)
-            if k in allowed_users:
-                del allowed_users[k]
-            save_users()
-            bot.answer_callback_query(call.id, f"🚫 {t}")
-            _send_users_list(cid, mid)
-        elif d.startswith("del_"):
-            t = int(d.split("_")[1])
-            k = str(t)
-            if k in allowed_users:
-                del allowed_users[k]
-                save_users()
-            bot.answer_callback_query(call.id, f"✅ {t}")
-            _send_users_list(cid, mid)
-        return
-
-    # ─ Кнопки пользователя ──────────────
-    if not is_allowed(uid):
-        bot.answer_callback_query(call.id, "🔒 Нет доступа~")
-        return
-
-    if d == "regen":
-        bot.answer_callback_query(call.id, "🔧 Ищу другой...")
-        cmd_generate(FMsg(call, "/generate"))
-        return
-
-    table = {
-        "connect":    ("/connect",       "⚡ Подключаюсь..."),
-        "c_socks5":   ("/connect socks5","🔵"),
-        "c_socks4":   ("/connect socks4","🟣"),
-        "c_http":     ("/connect http",  "⚪"),
-        "disconnect": ("/disconnect",    "🔴"),
-        "rotate":     ("/rotate",        "🔄"),
-        "status":     ("/status",        ""),
-        "proxies":    ("/proxies",       ""),
-        "generate":   ("/generate",      "🔧"),
-    }
-    if d not in table:
-        return
-    cmd, ans = table[d]
-    bot.answer_callback_query(call.id, ans or None)
-    handlers = {
-        "/connect":        cmd_connect,
-        "/connect socks5": cmd_connect,
-        "/connect socks4": cmd_connect,
-        "/connect http":   cmd_connect,
-        "/disconnect":     cmd_disconnect,
-        "/rotate":         cmd_rotate,
-        "/status":         cmd_status,
-        "/proxies":        cmd_proxies,
-        "/generate":       cmd_generate,
-    }
-    handlers[cmd](FMsg(call, cmd))
-
-# ─ Рассылка ─────────────────────────────
-@bot.message_handler(func=lambda m: m.from_user.id in _broadcast_state
-                                    and _broadcast_state[m.from_user.id] is True
-                                    and m.text != "/cancel")
+# ══════════════════════════════════════════════════════
+#   РАССЫЛКА
+# ══════════════════════════════════════════════════════
+@bot.message_handler(func=lambda m: int(m.from_user.id) in _bcast and _bcast.get(int(m.from_user.id)))
 def handle_broadcast(msg):
-    if not is_admin(msg.from_user.id):
-        return
-    _broadcast_state.pop(msg.from_user.id, None)
+    if not is_admin(msg.from_user.id): return
+    _bcast.pop(int(msg.from_user.id), None)
     ok = fail = 0
-    for uid_str in list(allowed_users.keys()):
+    wait = _send(msg.chat.id, f"📢 Рассылка {len(users)} пользователям...")
+    for uid_str in list(users.keys()):
         try:
             bot.send_message(int(uid_str),
-                f"📢 Сообщение от администратора 🌸\n\n{msg.text}")
+                f"📢 Сообщение от {BOT_NAME} 🌸\n"
+                f"{DIVIDER}\n\n"
+                f"{msg.text}\n\n"
+                f"{DIVIDER}\n"
+                f"by {BOT_TAG}")
             ok += 1
-        except:
-            fail += 1
-    _send(msg.chat.id, f"✅ Рассылка\n✔ Доставлено: {ok}\n✖ Ошибок: {fail}")
+            time.sleep(0.05)
+        except: fail += 1
+    _edit(msg.chat.id, wait.message_id, f"✅ Рассылка завершена\n\n✅ Доставлено: {ok}\n❌ Ошибок: {fail}")
 
-# ─ /cancel ──────────────────────────────
-@bot.message_handler(commands=["cancel"])
-def cmd_cancel(msg):
+# ══════════════════════════════════════════════════════
+#   CALLBACKS
+# ══════════════════════════════════════════════════════
+@bot.callback_query_handler(func=lambda c: True)
+def on_callback(call):
+    uid  = int(call.from_user.id)
+    d    = call.data
+    cid  = call.message.chat.id
+    mid  = call.message.message_id
+
+    # noop
+    if d == "noop": _answer(call); return
+
+    # back to main
+    if d in ("back_main", "cancel_mode"):
+        _answer(call)
+        if uid in _state: _state[uid]["mode"] = None
+        face = random.choice(ASTOLFO_FACES)
+        try:
+            bot.edit_message_text(
+                f"{LOGO}\n\n"
+                f"{face}\n\n"
+                f"Выбери режим и отправь файл~ 💕",
+                cid, mid, reply_markup=kb_main(is_admin(uid))
+            )
+        except: _send(cid, "Главное меню~", kb_main(is_admin(uid)))
+        return
+
+    # back generic
+    if d.startswith("back_"):
+        _answer(call)
+        _send(cid, "◀ Назад~", kb_main(is_admin(uid))); return
+
+    # show stats
+    if d == "show_stats":
+        _answer(call)
+        total_files = sum(u.get("files",0) for u in users.values())
+        today_f = stats.get("daily", {}).get(today(), 0)
+        top_m = sorted(stats.get("methods",{}).items(), key=lambda x:-x[1])[:7]
+        top_str = "\n".join(f"  {i+1}. {m}: {n}×" for i,(m,n) in enumerate(top_m)) or "  нет данных"
+        try:
+            bot.edit_message_text(
+                f"📊 Статистика бота\n"
+                f"{DIVIDER}\n\n"
+                f"👥 Пользователей: {len(users)}\n"
+                f"📁 Файлов всего:  {total_files}\n"
+                f"📅 Сегодня:       {today_f}\n\n"
+                f"Топ методов:\n{top_str}",
+                cid, mid, reply_markup=kb_back()
+            )
+        except: pass
+        return
+
+    # show methods
+    if d == "show_methods":
+        _answer(call)
+        try:
+            bot.edit_message_text(
+                f"🧬 Методы деобфускации\n"
+                f"{DIVIDER}\n\n"
+                f"{METHODS_FULL}",
+                cid, mid, reply_markup=kb_back()
+            )
+        except: pass
+        return
+
+    # admin panel
+    if d == "admin_panel":
+        if not is_admin(uid): _answer(call, "🚫 Нет доступа", True); return
+        _answer(call)
+        try: bot.edit_message_text(_admin_text(), cid, mid, reply_markup=kb_admin())
+        except: _send(cid, _admin_text(), kb_admin())
+        return
+
+    # admin actions via callback
+    if d.startswith("adm_"):
+        if not is_admin(uid): _answer(call, "🚫", True); return
+        _answer(call)
+
+        if d == "adm_users":
+            lines = [f"👥 Пользователи ({len(users)})\n{DIVIDER}\n\n"]
+            for i, (uid_s, u) in enumerate(list(users.items())[:25], 1):
+                uname = f"@{u['username']}" if u.get('username') else f"ID:{uid_s}"
+                role = " 👑" if u.get("role") == "admin" else ""
+                lines.append(f"{i}. {u.get('name','?')}{role} {uname} — {u.get('files',0)} файлов\n")
+            if len(users) > 25: lines.append(f"...ещё {len(users)-25}")
+            try: bot.edit_message_text("".join(lines), cid, mid, reply_markup=kb_back("admin"))
+            except: _send(cid, "".join(lines), kb_back("admin"))
+
+        elif d == "adm_bans":
+            text = (f"🚫 Бан-лист ({len(banned)})\n{DIVIDER}\n\n" +
+                    "\n".join(f"• {b}" for b in list(banned)[:40])) if banned else "🚫 Бан-лист пуст~"
+            try: bot.edit_message_text(text, cid, mid, reply_markup=kb_back("admin"))
+            except: _send(cid, text, kb_back("admin"))
+
+        elif d == "adm_stats":
+            total_files = sum(u.get("files",0) for u in users.values())
+            today_f = stats.get("daily",{}).get(today(),0)
+            top_m = sorted(stats.get("methods",{}).items(), key=lambda x:-x[1])[:10]
+            top_str = "\n".join(f"  {i+1}. {m}: {n}×" for i,(m,n) in enumerate(top_m)) or "  нет"
+            week = sorted(stats.get("daily",{}).items())[-7:]
+            week_str = "\n".join(f"  {d_}: {n}" for d_,n in week)
+            text = (
+                f"📊 Детальная статистика\n{DIVIDER}\n\n"
+                f"👥 Пользователей: {len(users)}\n"
+                f"🚫 В бане: {len(banned)}\n"
+                f"📁 Файлов всего: {total_files}\n"
+                f"📅 Сегодня: {today_f}\n\n"
+                f"Топ методов:\n{top_str}\n\n"
+                f"По дням (7д):\n{week_str}"
+            )
+            try: bot.edit_message_text(text, cid, mid, reply_markup=kb_back("admin"))
+            except: _send(cid, text, kb_back("admin"))
+
+        elif d == "adm_logs":
+            try:
+                if os.path.exists(LOG_FILE):
+                    with open(LOG_FILE, 'r') as f:
+                        lines = f.readlines()
+                    last = "".join(lines[-30:]) if len(lines) >= 30 else "".join(lines)
+                    text = f"📝 Последние записи лога\n{DIVIDER}\n\n{last}"
+                    if len(text) > 4000: text = text[-4000:]
+                    try: bot.edit_message_text(text, cid, mid, reply_markup=kb_back("admin"))
+                    except: _send(cid, text, kb_back("admin"))
+                else:
+                    _send(cid, "Лог пустой~")
+            except Exception as e:
+                _send(cid, f"Ошибка чтения лога: {e}")
+
+        elif d == "adm_broadcast":
+            _bcast[uid] = True
+            try: bot.edit_message_text("📢 Отправь текст рассылки~ (/cancel отмена)", cid, mid, reply_markup=kb_back("admin"))
+            except: _send(cid, "📢 Отправь текст рассылки~")
+
+        elif d == "adm_clearlogs":
+            try:
+                open(LOG_FILE, 'w').close()
+                _send(cid, "✅ Логи очищены~")
+            except: _send(cid, "Ошибка очистки")
+
+        elif d == "back_admin":
+            try: bot.edit_message_text(_admin_text(), cid, mid, reply_markup=kb_admin())
+            except: _send(cid, _admin_text(), kb_admin())
+        return
+
+    # mode selection
+    mode_map = {
+        "mode_auto":   "auto",
+        "mode_detect": "detect",
+        "mode_v1":     "v1",
+        "mode_v2":     "v2",
+        "mode_v3":     "v3",
+        "mode_v4":     "v4",
+        "mode_exe":    "exe",
+        "mode_pyc":    "pyc",
+        "mode_pyz":    "pyz",
+    }
+    if d in mode_map:
+        if not is_allowed(uid): _answer(call, "🔒 Нет доступа", True); return
+        _answer(call)
+        mode = mode_map[d]
+        info = MODE_INFO[mode]
+        set_mode(uid, mode)
+        face = random.choice(ASTOLFO_FACES)
+        text = (
+            f"{info['title']}\n"
+            f"{DIVIDER}\n\n"
+            f"{face}\n\n"
+            f"{info['desc']}\n\n"
+            f"{DIVIDER}\n"
+            f"📎 Форматы: {info['formats']}\n\n"
+            f"✅ Отправь файл~ 💕"
+        )
+        try: bot.edit_message_text(text, cid, mid, reply_markup=kb_back_mode())
+        except: _send(cid, text, kb_back_mode())
+        return
+
+# ══════════════════════════════════════════════════════
+#   ОБРАБОТКА ДОКУМЕНТОВ
+# ══════════════════════════════════════════════════════
+@bot.message_handler(content_types=["document"])
+def handle_document(msg):
+    uid   = int(msg.from_user.id)
+    cid   = msg.chat.id
+
+    if not is_allowed(uid):
+        _send(cid, f"{LOGO}\n\n🔒 Доступ закрыт~\nНапиши {BOT_TAG} для доступа!")
+        return
+
+    mode = get_state(uid).get("mode")
+    if not mode:
+        _send(cid,
+            f"⚠️ Сначала выбери режим!\n\n"
+            f"{random.choice(ASTOLFO_FACES)}\n\n"
+            f"Нажми кнопку в меню~",
+            kb_main(is_admin(uid)))
+        return
+
+    doc   = msg.document
+    fname = doc.file_name or "file"
+    ext   = os.path.splitext(fname.lower())[1]
+    size  = doc.file_size or 0
+
+    # Проверка размера
+    if size > MAX_FILE_MB * 1024 * 1024:
+        _send(cid,
+            f"⚠️ Файл слишком большой ({size//1024//1024:.1f} MB)\n\n"
+            f"Максимум: {MAX_FILE_MB} MB")
+        return
+
+    # Проверка расширения (для не-exe режимов)
+    if mode not in ("exe",) and ext not in ALLOWED_EXT and ext != '':
+        _send(cid,
+            f"⚠️ Неподдерживаемый формат: {ext or 'без расширения'}\n\n"
+            f"Поддерживается: {', '.join(sorted(ALLOWED_EXT))}")
+        return
+
+    # Очищаем режим
+    get_state(uid)["mode"] = None
+
+    face = random.choice(ASTOLFO_FACES)
+    wait = _send(cid,
+        f"📥 Загружаю {fname}...\n\n"
+        f"{face}"
+    )
+    if not wait: return
+
+    def process():
+        try:
+            show_typing(cid)
+            file_info = bot.get_file(doc.file_id)
+            data      = bot.download_file(file_info.file_path)
+
+            # Счётчики
+            key = str(uid)
+            if key in users:
+                users[key]["files"] = users[key].get("files", 0) + 1
+            get_state(uid)["files_today"] = get_state(uid).get("files_today", 0) + 1
+
+            info = MODE_INFO.get(mode, {"name": mode, "emoji": "🔓"})
+            mode_name = f"{info['emoji']} {info['name']}"
+
+            log(f"FILE {uid} mode={mode} file={fname} size={size}")
+
+            # ── EXE ──────────────────────────────────
+            if mode == "exe" or (mode == "auto" and ext in ('.exe', '.pyd', '.so', '.elf')):
+                _process_exe(cid, wait.message_id, uid, data, fname)
+                return
+
+            # ── PYC ──────────────────────────────────
+            if mode == "pyc" or ext == ".pyc":
+                _edit(cid, wait.message_id,
+                    f"📟 Декомпилирую .pyc\n"
+                    f"{DIVIDER}\n"
+                    f"📄 {fname}\n"
+                    f"💾 {size:,} байт\n\n"
+                    f"{face}\n\n"
+                    f"⏳ Загружаю маршал...")
+                time.sleep(0.4)
+                _edit(cid, wait.message_id,
+                    f"📟 Декомпилирую .pyc\n"
+                    f"{DIVIDER}\n"
+                    f"📄 {fname}\n\n"
+                    f"⏳ uncompyle6 / marshal+dis...")
+                result, method = _v3_pyc_decompile(data)
+                if result:
+                    _send_result(cid, wait.message_id, uid, fname, result, f"pyc: {method}", size, len(result), mode)
+                else:
+                    _send_fail(cid, wait.message_id, fname, method, mode)
+                return
+
+            # ── PYZ ──────────────────────────────────
+            if mode == "pyz" or ext in (".pyz", ".zip"):
+                _edit(cid, wait.message_id,
+                    f"🗜️ Извлекаю архив\n"
+                    f"{DIVIDER}\n"
+                    f"📄 {fname}\n"
+                    f"💾 {size:,} байт\n\n"
+                    f"⏳ Распаковываю...")
+                result, method = _v3_pyz_extract(data)
+                if result:
+                    _send_result(cid, wait.message_id, uid, fname, result, f"pyz: {method}", size, len(result), mode)
+                else:
+                    _send_fail(cid, wait.message_id, fname, method, mode)
+                return
+
+            # ── Python source ─────────────────────────
+            try:
+                code = data.decode("utf-8", errors="replace")
+            except:
+                _edit(cid, wait.message_id, "❌ Не удалось прочитать файл как текст", kb_main(is_admin(uid)))
+                return
+
+            chars_in = len(code)
+            lines_in = code.count('\n') + 1
+
+            if mode == "detect":
+                _process_detect(cid, wait.message_id, uid, fname, code, lines_in, chars_in)
+            elif mode == "v1":
+                animate_decode_steps(cid, wait.message_id, fname, mode_name)
+                result, method = deobfuscate_v1(code)
+                if result:
+                    _send_result(cid, wait.message_id, uid, fname, result, f"v1: {method}", chars_in, len(result), mode)
+                else:
+                    _send_fail(cid, wait.message_id, fname, method or "паттерн не найден", mode)
+            elif mode == "v2":
+                animate_decode_steps(cid, wait.message_id, fname, mode_name)
+                result = deobfuscate_v2(code)
+                _send_result(cid, wait.message_id, uid, fname, result, "v2: Ренди 2.0", chars_in, len(result), mode)
+            elif mode == "v3":
+                animate_decode_steps(cid, wait.message_id, fname, mode_name)
+                result, method = deobfuscate_v3(code)
+                if result:
+                    _send_result(cid, wait.message_id, uid, fname, result, f"v3: {method}", chars_in, len(result), mode)
+                else:
+                    _send_fail(cid, wait.message_id, fname, method or "метод не найден", mode)
+            elif mode == "v4":
+                animate_decode_steps(cid, wait.message_id, fname, mode_name)
+                result, method = deobfuscate_v4(code)
+                if result:
+                    _send_result(cid, wait.message_id, uid, fname, result, f"v4: {method}", chars_in, len(result), mode)
+                else:
+                    _send_fail(cid, wait.message_id, fname, method or "метод не найден", mode)
+            else:
+                # AUTO
+                _process_auto(cid, wait.message_id, uid, fname, code, chars_in, mode)
+
+        except Exception as e:
+            print(f"[process] {traceback.format_exc()}")
+            try: _edit(cid, wait.message_id, f"❌ Ошибка: {e}", kb_main(is_admin(uid)))
+            except: pass
+
+    threading.Thread(target=process, daemon=True).start()
+
+
+def _process_detect(cid, mid, uid, filename, code, lines_in, chars_in):
+    """Анализ без декода с красивым выводом."""
+    face = random.choice(ASTOLFO_FACES)
+    _edit(cid, mid,
+        f"🔬 Анализирую {filename}\n{DIVIDER}\n\n"
+        f"{face}\n\n"
+        f"⏳ Сканирую паттерны...")
+    time.sleep(0.6)
+
+    info = detect_all_methods(code)
+
+    _edit(cid, mid,
+        f"🔬 Сканирую признаки обфускации...\n\n"
+        f"▰▰▰▰▰▰▰▰▰▰ 100% ✅")
+    time.sleep(0.4)
+
+    v1m  = info.get("v1", "") or ""
+    v3m  = info.get("v3", "") or ""
+
+    lines = [
+        f"🔬 Анализ завершён\n"
+        f"{DIVIDER}\n\n"
+        f"📄 {filename}\n"
+        f"📊 {lines_in:,} строк · {chars_in:,} символов\n"
+        f"{DIVIDER}\n\n"
+        f"ОБНАРУЖЕННЫЕ МЕТОДЫ:\n\n"
+    ]
+
+    if v1m:
+        lines.append(f"✅ v1: {v1m}\n")
+    else:
+        lines.append(f"◽ v1: не обнаружен\n")
+
+    if v3m and v3m != "не определён":
+        lines.append(f"✅ v3/v4: {v3m}\n")
+    else:
+        lines.append(f"◽ v3/v4: не обнаружен\n")
+
+    lines.append(f"\n{DIVIDER_THIN}\nПРИЗНАКИ:\n\n")
+
+    checks = [
+        ("exec() вызовы",    info.get("has_exec"),        "🔴"),
+        ("Base64 данные",    info.get("has_base64"),       "🟡"),
+        ("XOR шифрование",   info.get("has_xor"),          "🔴"),
+        ("State-machine",    info.get("has_state_machine"),"🔴"),
+        ("Call-wrappers",    info.get("has_wrappers"),     "🟡"),
+        ("marshal",          info.get("has_marshal"),      "🔴"),
+        ("PyArmor",          info.get("has_pyarmor"),      "⛔"),
+        ("Hyperion/RC4",     info.get("has_hyperion"),     "🔴"),
+        ("rot13",            info.get("has_rot13"),        "🟡"),
+        ("Реверс строк",     info.get("has_reverse"),      "🟡"),
+        ("bz2/lzma",         info.get("has_bz2") or info.get("has_lzma"), "🟡"),
+    ]
+    chr_n = info.get("has_chr", 0)
+    if chr_n: checks.append((f"chr() × {chr_n}", True, "🟡"))
+
+    found = [(n, e) for n, v, e in checks if v]
+    if found:
+        for n, e in found: lines.append(f"  {e} {n}\n")
+    else:
+        lines.append("  ◽ Явных признаков не обнаружено\n")
+
+    lines.append(f"\n{DIVIDER_THIN}\n💡 РЕКОМЕНДАЦИЯ:\n\n")
+    if v1m:
+        lines.append(f"  → ⚡ АВТО или 🔓 v1 ({v1m})\n")
+    elif v3m and v3m != "не определён":
+        lines.append(f"  → ⚡ АВТО или 🧬 v3 ({v3m.split(',')[0]})\n")
+    elif info.get("has_xor") or info.get("has_state_machine") or info.get("has_wrappers"):
+        lines.append(f"  → ⚡ АВТО или 🔩 v2 (Ренди 2.0)\n")
+    else:
+        lines.append(f"  → ⚡ АВТО — перебирает все методы\n")
+
+    k = types.InlineKeyboardMarkup(row_width=1)
+    k.add(types.InlineKeyboardButton("⚡ Декодировать АВТО",    callback_data="mode_auto"))
+    k.row(
+        types.InlineKeyboardButton("🔓 v1", callback_data="mode_v1"),
+        types.InlineKeyboardButton("🔩 v2", callback_data="mode_v2"),
+        types.InlineKeyboardButton("🧬 v3", callback_data="mode_v3"),
+    )
+    k.add(types.InlineKeyboardButton("◀ Главное меню",         callback_data="back_main"))
+    _edit(cid, mid, "".join(lines), k)
+
+
+def _process_auto(cid, mid, uid, filename, code, chars_in, mode):
+    """АВТО — умный перебор с анимацией."""
+    face = random.choice(ASTOLFO_FACES)
+
+    def step_msg(step, total, name, status="⏳"):
+        bar_done = "█" * step
+        bar_left = "░" * (total - step)
+        pct = int(step / total * 100)
+        return (
+            f"⚡ АВТО-деобфускация\n"
+            f"{DIVIDER}\n"
+            f"📄 {filename}\n"
+            f"📊 {chars_in:,} символов\n\n"
+            f"{face}\n\n"
+            f"[{bar_done}{bar_left}] {pct}%\n"
+            f"{status} {name}..."
+        )
+
+    total = 4
+
+    # v1
+    _edit(cid, mid, step_msg(1, total, "v1 base64/zlib/rendy"))
+    time.sleep(0.5)
+    r, m = deobfuscate_v1(code)
+    if r:
+        _send_result(cid, mid, uid, filename, r, f"v1: {m}", chars_in, len(r), mode)
+        return
+
+    # v3
+    _edit(cid, mid, step_msg(2, total, "v3 rot13/xor/chr/marshal", "✗ v1"))
+    time.sleep(0.5)
+    r, m = deobfuscate_v3(code)
+    if r:
+        _send_result(cid, mid, uid, filename, r, f"v3: {m}", chars_in, len(r), mode)
+        return
+
+    # v4
+    _edit(cid, mid, step_msg(3, total, "v4 base62/xor-multi/eval-chain", "✗ v1 v3"))
+    time.sleep(0.5)
+    r, m = deobfuscate_v4(code)
+    if r:
+        _send_result(cid, mid, uid, filename, r, f"v4: {m}", chars_in, len(r), mode)
+        return
+
+    # v2 (всегда что-то делает)
+    _edit(cid, mid, step_msg(4, total, "v2 Ренди 2.0 Universal (финал)", "✗ v1 v3 v4"))
+    time.sleep(0.6)
+    result = deobfuscate_v2(code)
+    _send_result(cid, mid, uid, filename, result, "v2: Ренди 2.0 (fallback)", chars_in, len(result), mode)
+
+
+def _process_exe(cid, mid, uid, data, filename):
+    """EXE — все форматы."""
+    exe_type = detect_exe_type(data)
+    face = random.choice(ASTOLFO_FACES)
+
+    frames = [
+        f"📦 EXE Extractor\n{DIVIDER}\n📄 {filename}\n💾 {len(data):,} байт\n🔍 Тип: {exe_type}\n\n{face}\n\n▱▱▱▱▱▱▱▱▱▱  0%",
+        f"📦 EXE Extractor\n{DIVIDER}\n📄 {filename}\n💾 {len(data):,} байт\n🔍 Тип: {exe_type}\n\n{face}\n\n▰▰▰▱▱▱▱▱▱▱ 30%\n⏳ Сканирую сигнатуры...",
+        f"📦 EXE Extractor\n{DIVIDER}\n📄 {filename}\n💾 {len(data):,} байт\n🔍 Тип: {exe_type}\n\n{face}\n\n▰▰▰▰▰▱▱▱▱▱ 50%\n⏳ Извлекаю архивы...",
+        f"📦 EXE Extractor\n{DIVIDER}\n📄 {filename}\n💾 {len(data):,} байт\n🔍 Тип: {exe_type}\n\n{face}\n\n▰▰▰▰▰▰▰▱▱▱ 70%\n⏳ Декомпилирую .pyc...",
+        f"📦 EXE Extractor\n{DIVIDER}\n📄 {filename}\n💾 {len(data):,} байт\n🔍 Тип: {exe_type}\n\n{face}\n\n▰▰▰▰▰▰▰▰▰▰ 100% ✅\n⏳ Финализирую...",
+    ]
+    for frame in frames:
+        try: bot.edit_message_text(frame, cid, mid)
+        except: pass
+        time.sleep(0.8)
+
+    out_dir = tempfile.mkdtemp(prefix="togaff_exe_")
+    try:
+        ok, msg_text, files = extract_from_exe(data, out_dir, filename)
+        icon = "✅" if ok else "⚠️"
+
+        if not files:
+            _edit(cid, mid,
+                f"❌ EXE: не удалось извлечь\n{DIVIDER}\n\n"
+                f"📄 {filename}\n"
+                f"🔍 Тип: {exe_type}\n"
+                f"Причина: {msg_text}",
+                kb_main(is_admin(uid)))
+            return
+
+        _edit(cid, mid,
+            f"{icon} EXE извлечено!\n{DIVIDER}\n\n"
+            f"📄 {filename}\n"
+            f"🔍 Тип: {exe_type}\n"
+            f"{icon} {msg_text}\n\n"
+            f"📂 Отправляю {min(len(files),15)} файл(ов)...")
+
+        show_typing(cid)
+        sent = 0
+        for fpath in files[:15]:
+            try:
+                with open(fpath, "rb") as f:
+                    fn = os.path.basename(fpath)
+                    ext_f = os.path.splitext(fn)[1]
+                    cap = f"📦 {exe_type} | {fn}"
+                    bot.send_document(cid, f, visible_file_name=fn, caption=cap)
+                    sent += 1
+                time.sleep(0.3)
+            except Exception as e:
+                print(f"[send exe file] {e}")
+
+        if len(files) > 15:
+            _send(cid, f"⚠️ Показаны {sent}/{len(files)} файлов")
+
+        # Обновляем счётчик
+        key = str(uid)
+        if key in users:
+            users[key]["files"] = users[key].get("files", 0) + 1
+            m_key = f"exe-{exe_type}"
+            users[key].setdefault("methods", {})[m_key] = users[key]["methods"].get(m_key, 0) + 1
+        update_stats(f"exe-{exe_type}")
+        save_all()
+        log(f"EXE {uid} {filename} type={exe_type} files={len(files)}")
+
+        face2 = random.choice(ASTOLFO_FACES)
+        _send(cid,
+            f"✅ Готово~ {face2}\n\n"
+            f"📦 {exe_type} → {sent} файлов\n\n"
+            f"Отправь ещё файл~ 💕",
+            kb_main(is_admin(uid)))
+
+    finally:
+        try: shutil.rmtree(out_dir)
+        except: pass
+
+
+def _send_result(cid, mid, uid, filename, result, method, chars_in, chars_out, mode):
+    """Отправляет декодированный файл с красивой анимацией."""
+    face = random.choice(ASTOLFO_FACES)
+    red  = max(0, round(100 * (1 - chars_out / max(chars_in, 1))))
+    lines_out = result.count('\n') + 1 if result else 0
+
+    # Анимация "готово"
+    done_text = (
+        f"✅ Декодировано!\n"
+        f"{DIVIDER}\n"
+        f"📄 {filename}\n\n"
+        f"{face}\n\n"
+        f"▰▰▰▰▰▰▰▰▰▰ 100% ✅\n\n"
+        f"🔑 Метод:    {method}\n"
+        f"💬 Символов: {chars_in:,} → {chars_out:,}  (-{red}%)\n"
+        f"📝 Строк:    {lines_out:,}"
+    )
+    _edit(cid, mid, done_text)
+    time.sleep(0.3)
+
+    out_name = "decoded_" + filename
+    out_path = f"/tmp/togaff_{out_name}"
+    try:
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(result)
+        show_typing(cid)
+        with open(out_path, "rb") as f:
+            caption = (
+                f"🔓 {method}\n"
+                f"📄 {filename}\n"
+                f"💬 {chars_in:,} → {chars_out:,} символов (-{red}%)"
+            )
+            bot.send_document(cid, f, visible_file_name=out_name, caption=caption)
+    except Exception as e:
+        print(f"[send result] {e}")
+    finally:
+        try: os.remove(out_path)
+        except: pass
+
+    # Обновляем статистику
+    key = str(uid)
+    if key in users:
+        m_key = method.split(":")[0].strip() if ":" in method else method
+        users[key].setdefault("methods", {})[m_key] = users[key]["methods"].get(m_key, 0) + 1
+    update_stats(method)
+    save_all()
+    log(f"DECODED {uid} {filename} method={method} {chars_in}→{chars_out}")
+
+    done_msg = random.choice(DONE_MSGS)
+    _send(cid,
+        f"{done_msg}\n\n"
+        f"Отправь ещё файл~ 💕",
+        kb_after_decode(mode))
+
+
+def _send_fail(cid, mid, filename, reason, mode):
+    """Красивое сообщение об ошибке."""
+    face = random.choice(ASTOLFO_FACES)
+    fail_msg = random.choice(FAIL_MSGS)
+    _edit(cid, mid,
+        f"❌ Не удалось декодировать\n"
+        f"{DIVIDER}\n\n"
+        f"📄 {filename}\n\n"
+        f"{face}\n\n"
+        f"Причина: {reason}\n\n"
+        f"💡 {fail_msg}~",
+        kb_main())
+
+# ══════════════════════════════════════════════════════
+#   ERROR HANDLER
+# ══════════════════════════════════════════════════════
+@bot.message_handler(func=lambda m: True)
+def handle_unknown(msg):
     uid = msg.from_user.id
-    _deobf_state.pop(uid, None)
-    _broadcast_state.pop(uid, None)
-    _send(msg.chat.id, "❌ Отменено~")
+    if uid in _bcast and _bcast.get(uid): return  # handled above
+    if not is_allowed(uid): return
+    _send(msg.chat.id,
+        f"Привет~ 🌸\n\n"
+        f"Отправь мне файл для декодирования,\n"
+        f"но сначала выбери режим!\n\n"
+        f"{random.choice(ASTOLFO_FACES)}",
+        kb_main(is_admin(uid)))
 
-# ═══════════════════════════════════════
-#              ЗАПУСК
-# ═══════════════════════════════════════
+# ══════════════════════════════════════════════════════
+#   ЗАПУСК
+# ══════════════════════════════════════════════════════
 if __name__ == "__main__":
-    print("=" * 55)
-    print("  🌸 TOGAFF VPN · Astolfo Ultimate Edition 🌸")
-    print(f"  PySocks: {'✓ SOCKS5/4 активны' if SOCKS_OK else '✗ pip install PySocks requests[socks]'}")
-    print(f"  Фото:    {'✓ '+WELCOME_PHOTO if os.path.exists(WELCOME_PHOTO) else '✗ нет файла '+WELCOME_PHOTO}")
-    print(f"  Admins:  {ADMIN_IDS}")
-    print(f"  Users:   {len(allowed_users)}")
-    print("=" * 55)
-
-    def startup():
-        print("🌸 Загружаю базу...")
-        refresh_cache()
-        time.sleep(3)
-        print("🌸 Прогреваю смарт-пул...")
-        my_ip = get_my_ip() or ""
-        build_smart_pool(my_ip, sample=SCAN_SAMPLE, workers=VERIFY_WORKERS)
-
-    def auto_refresh():
-        while True:
-            time.sleep(TOP_TTL)
-            my_ip = get_my_ip() or ""
-            if my_ip:
-                print("🌸 Авто-обновление пула...")
-                build_smart_pool(my_ip, sample=SCAN_SAMPLE // 2, workers=VERIFY_WORKERS)
-
-    threading.Thread(target=startup,      daemon=True).start()
-    threading.Thread(target=auto_refresh, daemon=True).start()
+    print("═" * 60)
+    print(f"  🔓 {BOT_NAME} {BOT_VER}")
+    print(f"  by {BOT_TAG}")
+    print(f"  Admins: {ADMIN_IDS}")
+    print(f"  Users:  {len(users)}")
+    print(f"  Banned: {len(banned)}")
+    print("═" * 60)
+    print("🌸 Бот запущен~")
+    print()
     bot.infinity_polling(timeout=30, long_polling_timeout=20)
