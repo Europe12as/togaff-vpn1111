@@ -3119,7 +3119,7 @@ def handle_menu_button(msg):
         ),
         "waiting_v3bin": (
             "📦 *EXE / BINARY UNPACKER*\n\n"
-            "PyInstaller · cx_Freeze · py2exe\n"
+            "PyInstaller · cx Freeze / py2exe\n"
             "zipapp · .pyc · .pyz\n\n"
             "📎 Send `.exe` / `.pyc` / `.pyz` file:"
         ),
@@ -3441,17 +3441,19 @@ def cmd_start(msg):
             f"🆕 `v4`  OMEGA exclusive · utf-8 fix\n"
             f"🔮 `v5`  ULTRA · 20 exclusive techniques\n"
             f"♾️  `MULTI` multi-layer auto decoder\n"
-            f"📦 `EXE` PyInstaller · cx_Freeze · py2exe\n"
+            f"📦 `EXE` PyInstaller / cxFreeze / py2exe\n"
             f"🧬 `DEEP` 6-method binary scan\n\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"Use the menu below 👇"
         )
         bot.send_message(msg.chat.id, text, reply_markup=kb_main(), parse_mode="Markdown")
     except Exception as e:
-        import traceback; print(f"[start] ERR: {traceback.format_exc()}")
-        try: bot.send_message(msg.chat.id,
-            "⚡ *sicksilent deobf*\n\nError occurred. Try /start",
-            parse_mode="Markdown")
+        import traceback
+        err = traceback.format_exc()
+        print(f"[start] ERR: {err}")
+        try:
+            bot.send_message(msg.chat.id,
+                "⚡ sicksilent deobf\n\nSomething went wrong, restarting...\n\nError: " + str(e)[:100])
         except: pass
 
 
@@ -3631,7 +3633,7 @@ def on_deobf_callback(call):
         ),
         "waiting_v3bin": (
             "📦 *EXE / BINARY UNPACKER*\n\n"
-            "PyInstaller · cx_Freeze · py2exe · .pyc\n\n"
+            "PyInstaller · cxFreeze / py2exe · .pyc\n\n"
             "📎 Send `.exe` / `.pyc` / `.pyz` file:"
         ),
         "waiting_deep": (
