@@ -27,12 +27,8 @@ TOKEN     = "8603769389:AAFNrImTZhMY0ctceejoFbNkosE54cNsE30"
 ADMIN_IDS = {8683323127}
 ADMIN_USERNAME = "@godmidainte"
 
-# ── Подписка на канал ──────────────────────────────────────────
-# Канал приватный — проверка по invite-link через Bot API недоступна.
-# Схема: пользователь нажимает "[+] Я подписался" → бот отправляет
-# заявку админу, тот выдаёт доступ через /add ID
-CHANNEL_LINK = "https://t.me/+p5w4sYOREc0zZTRi"
-CHANNEL_ID   = None   # Если публичный — "@channel_username"
+CHANNEL_LINK = ""  # Channel removed
+CHANNEL_ID   = None
 
 USERS_FILE  = "allowed_users.json"
 BANNED_FILE = "banned_users.json"
@@ -85,23 +81,17 @@ def record_stat(method: str, bytes_in: int):
     save_stats()
 
 def access_required(fn):
+    """Декоратор — проверяет whitelist перед выполнением команды."""
     def wrapper(msg):
-        uid   = msg.from_user.id
+        uid   = int(msg.from_user.id)
         name  = msg.from_user.first_name or "user"
         uname = getattr(msg.from_user, "username", "") or ""
-        if is_banned(uid):
-            bot.send_message(msg.chat.id,
-                f"🚫 *You are banned.*\nFor questions: {ADMIN_USERNAME}",
-                parse_mode="Markdown")
-            return
-        if not is_allowed(uid):
-            pending_subscribe[uid] = {"name": name, "username": uname, "ts": ts()}
-            _send_welcome_media(msg.chat.id)
-            _send_registration_flow(msg.chat.id, name, uname, uid)
-            return
-        return fn(msg)
+        if is_allowed(uid):
+            return fn(msg)
+        _send_locked_screen(msg.chat.id, name, uid, uname)
     wrapper.__name__ = fn.__name__
     return wrapper
+
 
 def ts():
     return datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -2903,10 +2893,10 @@ def kb_deobf():
 
 # ── Inline: subscribe prompt ───────────────────────────────────
 def kb_subscribe():
-    IB = telebot.types.InlineKeyboardButton
+    """Inline keyboard for unregistered users (no channel)."""
     kb = telebot.types.InlineKeyboardMarkup()
-    kb.add(IB("📢  JOIN CHANNEL  →", url=CHANNEL_LINK))
-    kb.add(IB("✅  I subscribed — check access", callback_data="check_sub"))
+    IB = telebot.types.InlineKeyboardButton
+    kb.add(IB("📨 Request Access", callback_data="request_access"))
     return kb
 
 # ── Inline: after successful register ─────────────────────────
@@ -3000,27 +2990,21 @@ def _send_main_menu(chat_id: int, name: str = "user", is_adm: bool = False):
 
 
 def _send_registration_flow(chat_id: int, name: str, uname: str, uid: int):
-    """Beautiful premium registration/subscription flow."""
-    # Step 1: animated intro message
-    _anim_typing(chat_id, 0.8)
-
+    """Shows locked access screen and notifies admin."""
     intro = (
-        f"⚡ *SICKSILENT DEOBF*\n"
+        f"🔒 *ACCESS REQUIRED*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"Hey *{name}*! 👋\n\n"
-        f"This is a *private* Python deobfuscator\n"
-        f"with 50+ decode techniques.\n\n"
+        f"Hey *{name}*, this bot is private.\n\n"
+        f"📨 Press the button below to request access.\n"
+        f"Admin {ADMIN_USERNAME} will review your request.\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🔒 *Access is restricted*\n\n"
-        f"To get access you need to:\n\n"
-        f"  `1.` Subscribe to our channel\n"
-        f"  `2.` Press ✅ *I subscribed*\n"
-        f"  `3.` Wait for admin confirmation\n\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📢 Channel: {CHANNEL_LINK}\n"
-        f"👤 Admin: {ADMIN_USERNAME}"
+        f"_sicksilent deobf — {BOT_VERSION}_"
     )
     bot.send_message(chat_id, intro, reply_markup=kb_subscribe(), parse_mode="Markdown")
+    # Notify admin
+    for admin_id in ADMIN_IDS:
+        _send_admin_request_notification(admin_id, uid, name, uname)
+
 
 
 def _send_access_granted(chat_id: int, name: str):
@@ -3082,6 +3066,12 @@ def _send_admin_request_notification(admin_id: int, uid: int, name: str, uname: 
 # ================================================================
 #   REPLY KEYBOARD HANDLER  —  uses BTN_* constants
 # ================================================================
+
+def _send_locked_screen(chat_id: int, name: str, uid: int, uname: str = ""):
+    """Shows locked screen and sends admin notification."""
+    _send_registration_flow(chat_id, name, uname, uid)
+
+
 @bot.message_handler(func=lambda m: m.text in [
     BTN_AUTO, BTN_ANALYZE, BTN_EXE, BTN_DEEP,
     BTN_V1, BTN_V2, BTN_V3, BTN_V4, BTN_V5, BTN_MULTI,
@@ -3193,55 +3183,22 @@ def handle_menu_button(msg):
 #   SUBSCRIPTION & APPROVAL CALLBACKS
 # ================================================================
 
-@bot.callback_query_handler(func=lambda c: c.data == "check_sub")
-def on_check_sub(call):
+@bot.callback_query_handler(func=lambda c: c.data == "request_access")
+def on_request_access(call):
+    """User pressed 'Request Access' button."""
     uid   = call.from_user.id
     name  = call.from_user.first_name or "user"
     uname = getattr(call.from_user, "username", "") or ""
 
-    # Already in whitelist
     if is_allowed(uid):
-        bot.answer_callback_query(call.id, "✅ Access already granted!")
+        bot.answer_callback_query(call.id, "✅ You already have access!")
         try: bot.delete_message(call.message.chat.id, call.message.message_id)
         except: pass
-        _anim_typing(call.message.chat.id, 0.4)
-        _send_welcome_media(call.message.chat.id)
-        _anim_typing(call.message.chat.id, 0.5)
-        _send_access_granted(call.message.chat.id, name)
+        _send_main_menu(call.message.chat.id, name, is_admin(uid))
         return
 
-    # Public channel — auto check via API
-    if CHANNEL_ID:
-        try:
-            member = bot.get_chat_member(CHANNEL_ID, uid)
-            if member.status in ("member", "administrator", "creator"):
-                allowed_users[str(uid)] = {
-                    "username": uname, "first_name": name,
-                    "added": ts(), "uses": 0, "source": "channel_auto"
-                }
-                save_users()
-                pending_subscribe.pop(uid, None)
-                bot.answer_callback_query(call.id, "✅ Subscription confirmed!")
-                try: bot.delete_message(call.message.chat.id, call.message.message_id)
-                except: pass
-                _anim_typing(call.message.chat.id, 0.4)
-                _send_welcome_media(call.message.chat.id)
-                _anim_typing(call.message.chat.id, 0.5)
-                _send_access_granted(call.message.chat.id, name)
-                return
-            else:
-                bot.answer_callback_query(
-                    call.id,
-                    "❌ You are not subscribed to the channel yet!",
-                    show_alert=True
-                )
-                return
-        except: pass
-
-    # Private channel — send request to admins
-    pending_subscribe[uid] = {"name": name, "username": uname, "ts": ts()}
+    # Send request to all admins
     bot.answer_callback_query(call.id, "📨 Request sent to admin!")
-
     for admin_id in ADMIN_IDS:
         _send_admin_request_notification(admin_id, uid, name, uname)
 
@@ -3250,14 +3207,14 @@ def on_check_sub(call):
             f"📨 *REQUEST SENT*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Hey *{name}*, your request has been sent\n"
-            f"to {ADMIN_USERNAME}\n\n"
-            f"⏳ *Waiting for confirmation...*\n\n"
-            f"_You will receive a notification once\n"
-            f"your access is approved._",
+            f"to {ADMIN_USERNAME}.\n\n"
+            f"⏳ *Waiting for approval...*\n\n"
+            f"_You will be notified once access is granted._",
             call.message.chat.id, call.message.message_id,
             parse_mode="Markdown"
         )
     except: pass
+
 
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("approve_") or c.data.startswith("deny_"))
@@ -4079,83 +4036,6 @@ def _send_result(chat_id, msg_id, result, orig_name, method, lines_in, chars_in,
 # ══════════════════════════════════════════════════════════════
 #   CALLBACK — ПРОВЕРКА ПОДПИСКИ НА КАНАЛ
 # ══════════════════════════════════════════════════════════════
-@bot.callback_query_handler(func=lambda c: c.data == "check_sub")
-def on_check_sub(call):
-    uid   = call.from_user.id
-    name  = call.from_user.first_name or "анон"
-    uname = getattr(call.from_user, "username", "") or ""
-
-    # Если уже в whitelist — просто пускаем
-    if is_allowed(uid):
-        bot.answer_callback_query(call.id, "[+] Access already granted!")
-        try:
-            bot.edit_message_text(
-                f"[+] Access granted! Welcome, {name}!\nUse /start to begin.",
-                call.message.chat.id, call.message.message_id)
-        except: pass
-        return
-
-    # Если канал публичный — пробуем проверить через API
-    if CHANNEL_ID:
-        try:
-            member = bot.get_chat_member(CHANNEL_ID, uid)
-            if member.status in ("member", "administrator", "creator"):
-                # Автоматически выдаём доступ
-                allowed_users[str(uid)] = {
-                    "username": uname, "first_name": name,
-                    "added": ts(), "uses": 0, "source": "channel_auto"
-                }
-                save_users()
-                pending_subscribe.pop(uid, None)
-                bot.answer_callback_query(call.id, "[+] Subscription confirmed! Access granted!")
-                try:
-                    bot.edit_message_text(
-                        f"[+] Доступ открыт автоматически!\n\n"
-                        f"Используй /start, {name}! [!]",
-                        call.message.chat.id, call.message.message_id)
-                except: pass
-                return
-            else:
-                bot.answer_callback_query(call.id, "[-] Ты не подписан на канал!", show_alert=True)
-                return
-        except: pass
-
-    # Приватный канал — отправляем заявку админу
-    pending_subscribe[uid] = {"name": name, "username": uname, "ts": ts()}
-    bot.answer_callback_query(call.id, "[REQ] Заявка отправлена администратору!")
-
-    uname_str = f"@{uname}" if uname else f"ID: {uid}"
-    admin_text = (
-        f"╔══════════════════════════════╗\n"
-        f"║  [REQ]  NEW ACCESS REQUEST  ║\n"
-        f"╚══════════════════════════════╝\n\n"
-        f"[USR] Имя:     {name}\n"
-        f"[USR] Юзер:   {uname_str}\n"
-        f"[ID] ID:      {uid}\n"
-        f"[TIME] Время:  {ts()}\n\n"
-        f"To grant access:\n"
-        f"/add {uid} {name}"
-    )
-    kb_admin_approve = telebot.types.InlineKeyboardMarkup()
-    kb_admin_approve.row(
-        telebot.types.InlineKeyboardButton(f"[+] Выдать доступ", callback_data=f"approve_{uid}_{name[:15]}"),
-        telebot.types.InlineKeyboardButton(f"[-] Отказать",      callback_data=f"deny_{uid}")
-    )
-    for admin_id in ADMIN_IDS:
-        try: bot.send_message(admin_id, admin_text, reply_markup=kb_admin_approve)
-        except: pass
-
-    try:
-        bot.edit_message_text(
-            f"╔══════════════════════════════╗\n"
-            f"║  [REQ]  REQUEST SENT  [REQ]   ║\n"
-            f"╚══════════════════════════════╝\n\n"
-            f"Your request was sent to {ADMIN_USERNAME}\n\n"
-            f"[WAIT] Waiting for admin approval...\n\n"
-            f"{DIV}\n"
-            f"[!] sicksilent deobf",
-            call.message.chat.id, call.message.message_id)
-    except: pass
 
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("approve_") or c.data.startswith("deny_"))
@@ -4428,7 +4308,6 @@ if __name__ == "__main__":
     print("|___/|_|\\___||_|\\_|___/___/_| |___|_|\\_| |_|")
     print()
     print(f"  Admin:   {ADMIN_USERNAME}")
-    print(f"  Channel: {CHANNEL_LINK}")
     print(f"  Users:   {len(allowed_users)}")
     print(f"  Decoded: {global_stats.get('total_decoded', 0)}")
     print("+------------------------------------------------+")
