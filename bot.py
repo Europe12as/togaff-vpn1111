@@ -3412,9 +3412,9 @@ def cmd_start(msg):
                 save_users()
 
         if not is_allowed(uid):
-            pending_subscribe[uid] = {"name": name, "username": uname, "ts": ts()}
             _send_welcome_media(msg.chat.id)
-            _send_registration_flow(msg.chat.id, name, uname, uid)
+            _anim_typing(msg.chat.id, 0.4)
+            _send_locked_screen(msg.chat.id, name, uid, uname)
             return
 
         key = str(uid)
@@ -3439,12 +3439,8 @@ def cmd_start(msg):
             f"🧠 `v2`  Rendy 2.0 · 30+ methods\n"
             f"🔧 `v3`  string decoders\n"
             f"🆕 `v4`  OMEGA exclusive · utf-8 fix\n"
-            f"🔮 `v5`  ULTRA engine · 20 techniques\n"
-            f"♾️  `MULTI` multi-layer decoder\n"
-            f"🔮 `v5`  ULTRA 20 techniques\n"
-            f"♾️  `MULTI` layer-by-layer decoder\n"
-            f"🔮 `v5`  ULTRA 20 techniques · deep decode\n"
-            f"♾️  `MULTI` layer-by-layer auto decoder\n"
+            f"🔮 `v5`  ULTRA · 20 exclusive techniques\n"
+            f"♾️  `MULTI` multi-layer auto decoder\n"
             f"📦 `EXE` PyInstaller · cx_Freeze · py2exe\n"
             f"🧬 `DEEP` 6-method binary scan\n\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
